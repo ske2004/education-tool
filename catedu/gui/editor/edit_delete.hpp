@@ -6,6 +6,9 @@
 
 struct EditDelete
 {
-    void show(UiPass &user, Renderer &renderer, Dispatcher &disp,
-              GenResources &gen_resources, Input &input, Camera &camera);
+    bool has_target;
+    RectI target_bounds;
+
+    void update(Dispatcher &disp, Input &input, Camera &camera);
+    void render(Renderer &renderer, GenResources &gen_resources);
 };

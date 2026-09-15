@@ -14,8 +14,10 @@ struct EditLine
     bool started;
     Vector2 pointer_start;
     Vector2 pointer_end;
+    Vector2 cursor;
 
-    void show(UiPass &user, Object::Type type, Renderer &renderer,
-              Dispatcher &disp, GenResources &gen_resources, Input &input,
-              Camera &camera);
+    void update(Dispatcher &disp, Input &input, Camera &camera,
+                Object::Type type);
+    void render(Renderer &renderer, Dispatcher &disp,
+                GenResources &gen_resources, Object::Type type);
 };

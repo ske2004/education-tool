@@ -6,7 +6,11 @@
 
 struct EditBasic
 {
-    void show(UiPass &user, Renderer &renderer, Dispatcher &disp,
-              GenResources &gen_resources, Input &input, Camera &camera,
-              Object::Type type);
+    Vector2 cursor;
+    bool valid;
+
+    void update(Dispatcher &disp, Input &input, Camera &camera,
+                Object::Type type);
+    void render(Renderer &renderer, GenResources &gen_resources,
+                Object::Type type);
 };

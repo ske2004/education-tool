@@ -564,9 +564,10 @@ void show_editor_ui(GuiEditor &editor, UiPass &user, ResourceSpec &resources,
         }
         else
         {
-            editor.sub_editor.show(user, renderer, editor.dispatcher,
-                                   gen_resources, input,
-                                   editor.editor_camera.cam);
+            editor.sub_editor.update(editor.dispatcher, input,
+                                     editor.editor_camera.cam);
+            editor.sub_editor.render(user, renderer, editor.dispatcher,
+                                     gen_resources);
             editor.editor_camera.handle_controls(input);
         }
     }
@@ -684,32 +685,53 @@ void GuiEditor::deinit()
     dispatcher.destroy();
 }
 
-void SubEditor::show(UiPass &user, Renderer &renderer, Dispatcher &disp,
-                     GenResources &gen_resources, Input &input, Camera &camera)
+void SubEditor::update(Dispatcher &disp, Input &input, Camera &camera)
 {
     switch (type)
     {
     case Type::deleter:
-        edit_delete.show(user, renderer, disp, gen_resources, input, camera);
+        edit_delete.update(disp, input, camera);
         break;
     case Type::building:
-        edit_building.show(user, renderer, disp, gen_resources, input, camera);
+        edit_building.update(disp, input, camera);
         break;
     case Type::road:
-        edit_line.show(user, Object::Type::road, renderer, disp, gen_resources,
-                       input, camera);
+        edit_line.update(disp, input, camera, Object::Type::road);
         break;
     case Type::wall:
-        edit_line.show(user, Object::Type::wall, renderer, disp, gen_resources,
-                       input, camera);
+        edit_line.update(disp, input, camera, Object::Type::wall);
         break;
     case Type::player:
-        edit_basic.show(user, renderer, disp, gen_resources, input, camera,
-                        Object::Type::player);
+        edit_basic.update(disp, input, camera, Object::Type::player);
         break;
     case Type::tree:
-        edit_basic.show(user, renderer, disp, gen_resources, input, camera,
-                        Object::Type::tree);
+        edit_basic.update(disp, input, camera, Object::Type::tree);
+        break;
+    }
+}
+
+void SubEditor::render(UiPass &user, Renderer &renderer, Dispatcher &disp,
+                       GenResources &gen_resources)
+{
+    switch (type)
+    {
+    case Type::deleter:
+        edit_delete.render(renderer, gen_resources);
+        break;
+    case Type::building:
+        edit_building.render(renderer, gen_resources);
+        break;
+    case Type::road:
+        edit_line.render(renderer, disp, gen_resources, Object::Type::road);
+        break;
+    case Type::wall:
+        edit_line.render(renderer, disp, gen_resources, Object::Type::wall);
+        break;
+    case Type::player:
+        edit_basic.render(renderer, gen_resources, Object::Type::player);
+        break;
+    case Type::tree:
+        edit_basic.render(renderer, gen_resources, Object::Type::tree);
         break;
     }
 }

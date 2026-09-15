@@ -38,8 +38,9 @@ struct SubEditor
     EditBuilding edit_building;
     EditLine edit_line;
 
-    void show(UiPass &user, Renderer &renderer, Dispatcher &disp,
-              GenResources &gen_resources, Input &input, Camera &camera);
+    void update(Dispatcher &disp, Input &input, Camera &camera);
+    void render(UiPass &user, Renderer &renderer, Dispatcher &disp,
+                GenResources &gen_resources);
 };
 
 struct GuiEditor

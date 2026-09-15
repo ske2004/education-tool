@@ -2,9 +2,7 @@
 #include <catedu/genobj/building.hpp>
 #include <catedu/genobj/grid.hpp>
 
-void EditBuilding::show(UiPass &user, Renderer &renderer, Dispatcher &disp,
-                        GenResources &gen_resources, Input &input,
-                        Camera &camera)
+void EditBuilding::update(Dispatcher &disp, Input &input, Camera &camera)
 {
     Ray3 pointer_ray = camera.screen_to_world_ray(
         input.mouse_pos, {sapp_widthf(), sapp_heightf()});
@@ -54,7 +52,12 @@ void EditBuilding::show(UiPass &user, Renderer &renderer, Dispatcher &disp,
         }
     }
 
-    if (disp.world.current->can_place_building(floors, x, y))
+    valid = disp.world.current->can_place_building(floors, x, y);
+}
+
+void EditBuilding::render(Renderer &renderer, GenResources &gen_resources)
+{
+    if (valid)
     {
         GeneratedObject building = genmesh_generate_building(floors);
         genobj_render_object(renderer, gen_resources, building,

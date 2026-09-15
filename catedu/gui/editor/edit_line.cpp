@@ -5,9 +5,8 @@
 #include "catedu/genobj/wall.hpp"
 #include "catedu/scene/world.hpp"
 
-void EditLine::show(UiPass &user, Object::Type type, Renderer &renderer,
-                    Dispatcher &disp, GenResources &gen_resources, Input &input,
-                    Camera &camera)
+void EditLine::update(Dispatcher &disp, Input &input, Camera &camera,
+                      Object::Type type)
 {
     Ray3 pointer_ray = camera.screen_to_world_ray(
         input.mouse_pos, {sapp_widthf(), sapp_heightf()});
@@ -17,6 +16,8 @@ void EditLine::show(UiPass &user, Object::Type type, Renderer &renderer,
 
     Vector3 at = ray3_at(pointer_ray, t);
     Vector2 pointer = {floorf(at.x), floorf(at.z)};
+
+    cursor = pointer;
 
     if (input.k[INPUT_MB_LEFT].pressed)
     {
@@ -33,6 +34,25 @@ void EditLine::show(UiPass &user, Object::Type type, Renderer &renderer,
         started = false;
     }
 
+    if (started)
+    {
+        if (input.k[INPUT_MB_LEFT].released)
+        {
+            brezenham(pointer_start.x, pointer_start.y, pointer_end.x,
+                      pointer_end.y, [&](int x, int y) {
+                          Object obj = {};
+                          obj.type = type;
+                          obj.x = x;
+                          obj.y = y;
+                          disp.place_object(obj);
+                      });
+        }
+    }
+}
+
+void EditLine::render(Renderer &renderer, Dispatcher &disp,
+                      GenResources &gen_resources, Object::Type type)
+{
     // TODO: We shouldn't  do this, but I need to so that the preview doesn't
     // show overlapping objects. I use this to check if the object can be
     // placed, I should probably do this in a better way.
@@ -71,24 +91,9 @@ void EditLine::show(UiPass &user, Object::Type type, Renderer &renderer,
     brezenham(pointer_start.x, pointer_start.y, pointer_end.x, pointer_end.y,
               preview);
 
-    if (started)
-    {
-        if (input.k[INPUT_MB_LEFT].released)
-        {
-            brezenham(pointer_start.x, pointer_start.y, pointer_end.x,
-                      pointer_end.y, [&](int x, int y) {
-                          Object obj = {};
-                          obj.type = type;
-                          obj.x = x;
-                          obj.y = y;
-                          disp.place_object(obj);
-                      });
-        }
-    }
-
     collisiontest.destroy();
 
     GeneratedObject grid = genmesh_generate_grid(16, 16);
     genobj_render_object(renderer, gen_resources, grid,
-                         Matrix4::translate({pointer.x, 0, pointer.y}));
+                         Matrix4::translate({cursor.x, 0, cursor.y}));
 }
