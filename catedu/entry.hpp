@@ -17,13 +17,7 @@
 #include "sokol/sokol_log.h"
 #include <umka_api.h>
 
-enum class RuntimeMode
-{
-    debug,
-    menu,
-    editor,
-    game,
-};
+#include "catedu/runtime_mode.hpp"
 
 struct Entry : SokolSetup
 {
