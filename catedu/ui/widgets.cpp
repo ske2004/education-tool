@@ -243,7 +243,8 @@ void begin_button_frame(UiPass &user, const char *id, AutoLayoutElement el,
 bool end_button_frame(UiPass &user)
 {
     bool pressed =
-        user.actively_hovered() && user.state->input.k[INPUT_MB_LEFT].released;
+        user.actively_hovered() && user.active() &&
+        user.state->input.k[INPUT_MB_LEFT].released;
     user.end_generic();
     user.state->element_storage.pop();
     return pressed;
