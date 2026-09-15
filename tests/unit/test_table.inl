@@ -1,7 +1,7 @@
 #include "catedu/core/storage/table.hpp"
 #include "tau/tau.h"
 
-TEST(Table)
+TEST(Table, BasicTest)
 {
     Table<int> test_table = {};
 

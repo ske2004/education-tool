@@ -17,7 +17,7 @@ struct EditLine
     Vector2 cursor;
 
     void update(Dispatcher &disp, Input &input, Camera &camera,
-                Object::Type type);
+                Vector2 viewport, Object::Type type);
     void render(Renderer &renderer, Dispatcher &disp,
                 GenResources &gen_resources, Object::Type type);
 };

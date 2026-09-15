@@ -38,7 +38,8 @@ struct SubEditor
     EditBuilding edit_building;
     EditLine edit_line;
 
-    void update(Dispatcher &disp, Input &input, Camera &camera);
+    void update(Dispatcher &disp, Input &input, Camera &camera,
+                Vector2 viewport);
     void render(UiPass &user, Renderer &renderer, Dispatcher &disp,
                 GenResources &gen_resources);
 };

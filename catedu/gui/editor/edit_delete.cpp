@@ -4,10 +4,11 @@
 #include "catedu/genobj/render.hpp"
 #include "catedu/sys/input.hpp"
 
-void EditDelete::update(Dispatcher &disp, Input &input, Camera &camera)
+void EditDelete::update(Dispatcher &disp, Input &input, Camera &camera,
+                        Vector2 viewport)
 {
     Ray3 pointer_ray = camera.screen_to_world_ray(
-        input.mouse_pos, {sapp_widthf(), sapp_heightf()});
+        input.mouse_pos, viewport);
 
     float t;
     ray3_vs_horizontal_plane(pointer_ray, 0.0, &t);

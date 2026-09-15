@@ -9,6 +9,7 @@ struct EditDelete
     bool has_target;
     RectI target_bounds;
 
-    void update(Dispatcher &disp, Input &input, Camera &camera);
+    void update(Dispatcher &disp, Input &input, Camera &camera,
+                Vector2 viewport);
     void render(Renderer &renderer, GenResources &gen_resources);
 };

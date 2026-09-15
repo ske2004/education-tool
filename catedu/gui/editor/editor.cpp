@@ -565,7 +565,8 @@ void show_editor_ui(GuiEditor &editor, UiPass &user, ResourceSpec &resources,
         else
         {
             editor.sub_editor.update(editor.dispatcher, input,
-                                     editor.editor_camera.cam);
+                                     editor.editor_camera.cam,
+                                     {sapp_widthf(), sapp_heightf()});
             editor.sub_editor.render(user, renderer, editor.dispatcher,
                                      gen_resources);
             editor.editor_camera.handle_controls(input);
@@ -685,27 +686,28 @@ void GuiEditor::deinit()
     dispatcher.destroy();
 }
 
-void SubEditor::update(Dispatcher &disp, Input &input, Camera &camera)
+void SubEditor::update(Dispatcher &disp, Input &input, Camera &camera,
+                       Vector2 viewport)
 {
     switch (type)
     {
     case Type::deleter:
-        edit_delete.update(disp, input, camera);
+        edit_delete.update(disp, input, camera, viewport);
         break;
     case Type::building:
-        edit_building.update(disp, input, camera);
+        edit_building.update(disp, input, camera, viewport);
         break;
     case Type::road:
-        edit_line.update(disp, input, camera, Object::Type::road);
+        edit_line.update(disp, input, camera, viewport, Object::Type::road);
         break;
     case Type::wall:
-        edit_line.update(disp, input, camera, Object::Type::wall);
+        edit_line.update(disp, input, camera, viewport, Object::Type::wall);
         break;
     case Type::player:
-        edit_basic.update(disp, input, camera, Object::Type::player);
+        edit_basic.update(disp, input, camera, viewport, Object::Type::player);
         break;
     case Type::tree:
-        edit_basic.update(disp, input, camera, Object::Type::tree);
+        edit_basic.update(disp, input, camera, viewport, Object::Type::tree);
         break;
     }
 }

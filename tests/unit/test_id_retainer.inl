@@ -1,7 +1,7 @@
 #include "catedu/core/storage/id_retainer.hpp"
 #include "tau/tau.h"
 
-TEST(IdRetainer)
+TEST(IdRetainer, BasicTest)
 {
     auto retainer = IdRetainer<std::string>::init();
 

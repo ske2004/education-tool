@@ -1,7 +1,7 @@
 #include "catedu/core/memory/serial_mem.hpp"
 #include "tau/tau.h"
 
-char *example_string = "Hello world!";
+const char *example_string = "Hello world!";
 size_t example_string_length = 13;
 
 struct BigStructure
@@ -9,7 +9,7 @@ struct BigStructure
     char dummy[32];
 };
 
-TEST(SerialMem)
+TEST(SerialMem, BasicTest)
 {
     uint8_t dest_buffer[32];
 
@@ -21,7 +21,7 @@ TEST(SerialMem)
         CHECK_EQ((unsigned long)serial.write_value<size_t>(64), 0);
         CHECK_EQ((unsigned long)serial.write_value(example_string_length), 0);
         CHECK_EQ((unsigned long)serial.write_buffer(
-                     {example_string, example_string_length}),
+                     {(void *)example_string, example_string_length}),
                  0);
         CHECK_EQ((unsigned long)serial.write_value<BigStructure>({}),
                  (unsigned long)(sizeof(BigStructure) - 3));

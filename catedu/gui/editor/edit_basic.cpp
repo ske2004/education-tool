@@ -7,10 +7,10 @@
 #include <catedu/genobj/wall.hpp>
 
 void EditBasic::update(Dispatcher &disp, Input &input, Camera &camera,
-                       Object::Type type)
+                       Vector2 viewport, Object::Type type)
 {
     Ray3 pointer_ray = camera.screen_to_world_ray(
-        input.mouse_pos, {sapp_widthf(), sapp_heightf()});
+        input.mouse_pos, viewport);
 
     float t;
     ray3_vs_horizontal_plane(pointer_ray, 0.0, &t);
