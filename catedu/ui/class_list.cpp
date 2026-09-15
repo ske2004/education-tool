@@ -1,5 +1,6 @@
 #include "class_list.hpp"
 #include "catedu/core/alloc/free_list.hpp"
+#include <cstring>
 
 static UiClassNode *alloc_node(FreeList<UiClassNode> &list, const char *name)
 {

@@ -1,6 +1,7 @@
 #include "mesh_generator.hpp"
 #include "catedu/core/alloc/allocator.hpp"
 #include <assert.h>
+#include <cstring>
 
 RenderMeshGenerator RenderMeshGenerator::init(size_t vertex_stride)
 {
