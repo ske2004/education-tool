@@ -9,20 +9,20 @@ EditorCamera EditorCamera::create()
     return camera;
 }
 
-void EditorCamera::lockin(Vector3 pos, float rotation)
+void EditorCamera::lockin(Vector3 pos, float rotation_deg)
 {
     cam.move(0, -(zoom * zoom), (zoom * zoom));
-    cam.yaw = rotation;
+    cam.yaw = rotation_deg;
     zoom_target = 4;
     cam.position = pos;
     cam.move(0, 0, 0);
     cam.move(0, (zoom * zoom), -(zoom * zoom));
 }
 
-void EditorCamera::follow(Vector3 pos, float rotation, float zoom_target)
+void EditorCamera::follow(Vector3 pos, float rotation_deg, float zoom_target)
 {
     cam.move(0, -(zoom * zoom), (zoom * zoom));
-    cam.yaw = slerp(cam.yaw, rotation, 5, sapp_frame_duration());
+    cam.yaw = slerp(cam.yaw, rotation_deg, 5, sapp_frame_duration());
     this->zoom_target = zoom_target;
     cam.position = slerp(cam.position, pos, 5, sapp_frame_duration());
     cam.move(0, 0, 0);

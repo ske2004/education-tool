@@ -653,7 +653,7 @@ bool GuiEditor::show(UiPass &user, GuiTransition &transition,
         float angle = 0;
         if (this->dispatcher.world.current->interior)
         {
-            angle = MATH_TAU / 2;
+            angle = 180.0f;
         }
         this->editor_camera.lockin({0, 0, 0}, angle);
         std::swap(this->previous_place, this->dispatcher.world.current);

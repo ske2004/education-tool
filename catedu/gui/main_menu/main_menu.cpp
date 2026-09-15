@@ -101,7 +101,7 @@ bool GuiMainMenu::show(UX &ux, GuiTransition &transition, World &world,
     UiPass &pass = ux.pass;
 
     this->angle += sapp_frame_duration() * 10.0f;
-    this->camera.follow({0, 0, -10}, this->angle * MATH_DEG_TO_RAD, 6);
+    this->camera.follow({0, 0, -10}, this->angle, 6);
     this->camera.update({sapp_width(), sapp_height()});
     renderer.camera = camera.cam;
     renderer.begin_pass();

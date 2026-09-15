@@ -219,7 +219,7 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
 
             if (world.current->interior)
             {
-                camera.follow({obj.x, 0, obj.y}, 3.1415);
+                camera.follow({obj.x, 0, obj.y}, 180.0f);
             }
             else
             {
@@ -246,7 +246,7 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
         PhysicsBody &player = physics.bodies.get_assert(this->player);
 
         camera.lockin({player.area.pos.x, 0, player.area.pos.y},
-                      world.current->interior ? 3.1415 : 0);
+                      world.current->interior ? 180.0f : 0);
         switch_target = nullptr;
     }
 }

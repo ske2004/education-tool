@@ -1,5 +1,6 @@
 ///
 /// BRIEF: First-person camera controller.
+/// All angles (fov, yaw, pitch) are stored in degrees.
 ///
 
 #pragma once
@@ -9,7 +10,7 @@ struct Camera
 {
     float fov_deg;
     float aspect;
-    float yaw, pitch;
+    float yaw, pitch; // degrees
     Vector3 position;
     Matrix4 vp;
 
