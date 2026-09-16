@@ -6,6 +6,9 @@ static bool is_init;
 
 void sg_tricks_init()
 {
+    if (is_init) return;
+    is_init = true;
+
     // init white pixel
     uint8_t dat[4] = {0xff, 0xff, 0xff, 0xff};
     sg_image_desc image_desc = {};
@@ -28,12 +31,7 @@ void sg_tricks_init()
 
 void sg_tricks_get_white_texture(sg_image &image, sg_sampler &sampler)
 {
-    if (!is_init)
-    {
-        sg_tricks_init();
-        is_init = true;
-    }
-
+    sg_tricks_init();
     image = t_white_image;
     sampler = t_white_sampler;
 }

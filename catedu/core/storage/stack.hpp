@@ -3,6 +3,7 @@
 #include "catedu/core/alloc/allocator.hpp"
 #include <assert.h>
 #include <iterator>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -46,6 +47,8 @@ template <class T> struct Stack
         {
             if (!scale())
             {
+                fprintf(stderr, "Stack::push: allocation failed, dropping value\n");
+                assert(false && "Stack::push: allocation failed");
                 return;
             }
         }
@@ -80,6 +83,8 @@ template <class T> struct Stack
         {
             if (!scale())
             {
+                fprintf(stderr, "Stack::ins: allocation failed, dropping value\n");
+                assert(false && "Stack::ins: allocation failed");
                 return;
             }
         }

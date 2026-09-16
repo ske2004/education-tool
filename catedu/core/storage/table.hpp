@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <catedu/core/alloc/allocator.hpp>
 #include <iterator>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -59,18 +60,22 @@ template <class T> struct Table
 
         T *new_values =
             (T *)ALLOCATOR_MALLOC.realloc(values, sizeof(T) * new_capacity);
-        // NOTE: Allocation error
         if (new_values == NULL)
         {
+            fprintf(stderr, "Table::scale: values realloc failed\n");
+            assert(false && "Table::scale: values realloc failed");
             return false;
         }
         values = new_values;
 
         Slot *new_slots = (Slot *)ALLOCATOR_MALLOC.realloc(
             slots, sizeof(Slot) * new_capacity);
-        // NOTE: Allocation error
         if (new_slots == NULL)
         {
+            // values was already expanded but capacity is unchanged,
+            // so accesses remain within the old bounds — safe but wasteful.
+            fprintf(stderr, "Table::scale: slots realloc failed\n");
+            assert(false && "Table::scale: slots realloc failed");
             return false;
         }
         slots = new_slots;

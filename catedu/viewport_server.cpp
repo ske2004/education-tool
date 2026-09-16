@@ -159,8 +159,10 @@ void ViewportServer::create_offscreen(int w, int h)
     offscreen_pa.colors[0].clear_value = {0.2f, 0.2f, 0.7f, 1.0f};
 
     // Allocate pixel buffers
-    pixels = (uint8_t *)realloc(pixels, w * h * 4);
-    flip_row = (uint8_t *)realloc(flip_row, w * 4);
+    if (pixels) ALLOCATOR_MALLOC.free(pixels);
+    if (flip_row) ALLOCATOR_MALLOC.free(flip_row);
+    pixels = (uint8_t *)ALLOCATOR_MALLOC.alloc(w * h * 4);
+    flip_row = (uint8_t *)ALLOCATOR_MALLOC.alloc(w * 4);
 }
 
 void ViewportServer::destroy_offscreen()
@@ -342,8 +344,8 @@ void ViewportServer::handle_command(const char *json_line)
 void ViewportServer::cleanup()
 {
     destroy_offscreen();
-    free(pixels);
-    free(flip_row);
+    ALLOCATOR_MALLOC.free(pixels);
+    ALLOCATOR_MALLOC.free(flip_row);
     pixels = nullptr;
     flip_row = nullptr;
 
