@@ -173,6 +173,45 @@ void Dispatcher::enter_place(Object *object)
         object->place = world.places.alloc();
         *object->place = Place::create();
         object->place->interior = true;
+
+        Place *place = object->place;
+
+        int dim = 6 + 2 * object->floors;
+        if (dim > 20) dim = 20;
+
+        int left_x  = -(dim / 2 - 1);
+        int right_x = dim / 2;
+        int south_y = -12;
+        int north_y = south_y + dim - 1;
+
+        // South wall with door gap (skip x=0 and x=1)
+        for (int x = left_x; x <= right_x; x++)
+        {
+            if (x == 0 || x == 1) continue;
+            place->place_object({Object::Type::wall, 0, (float)x, (float)south_y});
+        }
+
+        // North wall
+        for (int x = left_x; x <= right_x; x++)
+        {
+            place->place_object({Object::Type::wall, 0, (float)x, (float)north_y});
+        }
+
+        // West wall (excluding corners)
+        for (int y = south_y + 1; y <= north_y - 1; y++)
+        {
+            place->place_object({Object::Type::wall, 0, (float)left_x, (float)y});
+        }
+
+        // East wall (excluding corners)
+        for (int y = south_y + 1; y <= north_y - 1; y++)
+        {
+            place->place_object({Object::Type::wall, 0, (float)right_x, (float)y});
+        }
+
+        // Player spawn point
+        int spawn_y = (south_y + north_y) / 2;
+        place->place_object({Object::Type::player, 0, 0, (float)spawn_y});
     }
 
     world.current = object->place;
