@@ -225,8 +225,6 @@ bool Model::load_from_raw(RawModel &raw, Model &dest, int submodel)
         }
     }
 
-    ALLOCATOR_MALLOC.free(raw.texture_path);
-
     return true;
 }
 
@@ -234,4 +232,5 @@ void Model::deinit()
 {
     sg_destroy_buffer(vertex_buffer);
     sg_destroy_buffer(index_buffer);
+    texture.deinit();
 }

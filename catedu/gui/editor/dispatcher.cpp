@@ -151,8 +151,7 @@ void Dispatcher::remove_object(int x, int y)
     if (place_embedding)
     {
         op.has_place_embedding = true;
-        op.place_embedding = *place_embedding;
-        // TODO: Ideally i'd do it in the perform_op function.
+        op.place_embedding = place_embedding->clone();
         world.places.free(place_embedding);
     }
 

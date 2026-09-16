@@ -55,15 +55,17 @@ Renderer Renderer::init()
     Renderer result = {};
 
     result.pass_action = init_pass_action();
-    sg_shader shader = sg_make_shader(pbr_prog_shader_desc(sg_query_backend()));
-    init_pipelines(shader, result.pipeline, result.offscreen_pipeline);
+    result.shader = sg_make_shader(pbr_prog_shader_desc(sg_query_backend()));
+    init_pipelines(result.shader, result.pipeline, result.offscreen_pipeline);
 
     return result;
 }
 
 void Renderer::deinit()
 {
+    sg_destroy_pipeline(offscreen_pipeline);
     sg_destroy_pipeline(pipeline);
+    sg_destroy_shader(shader);
 }
 
 void Renderer::begin_pass()

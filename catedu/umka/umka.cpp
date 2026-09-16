@@ -104,9 +104,16 @@ bool UmkaModule::load(const char *source)
 
 bool UmkaModule::reload()
 {
+    // Copy path before load() frees last_source_path (which source aliases)
+    size_t len = strlen(last_source_path);
+    char *path_copy = (char *)ALLOCATOR_MALLOC.alloc(len + 1);
+    memcpy(path_copy, last_source_path, len + 1);
+
     umkaFree(umka);
-    umka = umkaAlloc();
-    return load(last_source_path);
+    umka = nullptr;
+    bool result = load(path_copy);
+    ALLOCATOR_MALLOC.free(path_copy);
+    return result;
 }
 
 UmkaError *UmkaModule::call(const char *module, const char *function,

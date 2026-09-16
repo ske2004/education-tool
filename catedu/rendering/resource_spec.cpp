@@ -2,6 +2,10 @@
 
 void ResourceSpec::deinit()
 {
+    for (auto [id, spec_model] : iter(models))
+    {
+        spec_model.model.deinit();
+    }
     tileset.deinit();
     models.deinit();
     tiles.deinit();

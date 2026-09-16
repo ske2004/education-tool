@@ -65,6 +65,7 @@ ResourceSpec load_resource_spec(const char *path)
         Model model;
         ok = Model::load_from_raw(raw_model, model, proto.submodel);
         assert(ok && "Failed to create model");
+        raw_model.deinit();
         result.models.allocate({proto.name, model, false});
     }
 

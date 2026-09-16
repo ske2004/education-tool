@@ -24,6 +24,7 @@ struct Params
 
 struct Renderer
 {
+    sg_shader shader;
     sg_pipeline pipeline;
     sg_pipeline offscreen_pipeline;
     sg_pass_action pass_action;
