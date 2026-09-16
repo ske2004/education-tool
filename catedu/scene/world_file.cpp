@@ -119,14 +119,9 @@ Dispatcher WorldFile::load(const char *path)
 {
     Mapper mapper = {};
 
-    FILE *file = fopen(path, "rb");
-
     Dispatcher dispatcher = Dispatcher::create();
 
-#if 1
-    return dispatcher;
-#endif
-
+    FILE *file = fopen(path, "rb");
     if (!file)
     {
         return dispatcher;

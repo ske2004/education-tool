@@ -16,7 +16,11 @@ void unperform_op(EditOp &op, World *world)
         {
             op.object.place = world->places.alloc(op.place_embedding);
         }
-        assert(world->current->place_object(op.object) != nullptr);
+        {
+            Object *placed = world->current->place_object(op.object);
+            assert(placed != nullptr);
+            (void)placed;
+        }
         return;
         break;
     case EditOp::Type::noop:
@@ -98,13 +102,20 @@ void Dispatcher::place_object(Object object)
 
     if (object.type == Object::Type::player)
     {
+        struct Pos { int x, y; };
+        Stack<Pos> to_remove = {};
         for (auto &obj : iter(world.current->objects))
         {
             if (obj.type == Object::Type::player)
             {
-                remove_object(obj.x, obj.y);
+                to_remove.push({(int)obj.x, (int)obj.y});
             }
         }
+        for (size_t i = 0; i < to_remove.count; i++)
+        {
+            remove_object(to_remove[i].x, to_remove[i].y);
+        }
+        to_remove.deinit();
     }
 
     if (perform_op(op, &world))
@@ -191,5 +202,7 @@ void Dispatcher::redo()
     current = current->next;
 
     dirty = true;
-    assert(perform_op(*current, &world));
+    bool ok = perform_op(*current, &world);
+    assert(ok);
+    (void)ok;
 }

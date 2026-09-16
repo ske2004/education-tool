@@ -36,11 +36,6 @@ Script Script::clone()
     result.nodes =
         FreeList<ScriptNode>::create(Arena::create(&ALLOCATOR_MALLOC));
 
-    for (auto &a : iter(global_events))
-    {
-        result.global_events.push(a);
-    }
-
     AddressFixer<ScriptNode> fixer = AddressFixer<ScriptNode>::create();
     for (auto &a : iter(nodes))
     {
@@ -63,6 +58,12 @@ Script Script::clone()
     }
 
     fixer.fix_addresses();
+
+    for (auto &a : iter(global_events))
+    {
+        result.global_events.push(a ? fixer.find_mapping(a) : nullptr);
+    }
+
     fixer.destroy();
 
     return result;

@@ -157,6 +157,8 @@ World World::clone()
 {
     World world = World::create();
 
+    world.script->destroy();
+    ALLOCATOR_MALLOC.free(world.script);
     world.script = (Script *)ALLOCATOR_MALLOC.alloc(sizeof(Script));
     *world.script = script->clone();
 
