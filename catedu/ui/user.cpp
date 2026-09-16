@@ -256,6 +256,10 @@ bool UiState::feed_event(const sapp_event *event)
     if (this->input.shortcut(MOD_CTRL, SAPP_KEYCODE_MINUS))
     {
         this->dpi_scale /= 1.125;
+        if (this->dpi_scale < 0.25f)
+        {
+            this->dpi_scale = 0.25f;
+        }
     }
     if (this->input.shortcut(MOD_CTRL, SAPP_KEYCODE_EQUAL))
     {
@@ -373,6 +377,13 @@ UiElementStorage UiElementStorage::init()
 
 void UiElementStorage::deinit()
 {
+    for (auto [id, el] : iter(this->elements))
+    {
+        if (el.userdata)
+        {
+            ALLOCATOR_MALLOC.free(el.userdata);
+        }
+    }
     this->elements.deinit();
     this->element_retainer.deinit();
 }

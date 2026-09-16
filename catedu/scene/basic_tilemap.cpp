@@ -51,8 +51,15 @@ void BasicTilemapSerial::deinit()
 
 TilePositionToTile BasicTilemapSerial::next()
 {
+    int ci = 0;
     for (auto &chunk : iter(tilemap->chunks))
     {
+        if (ci < chunk_id)
+        {
+            ci++;
+            continue;
+        }
+
         for (; tile_id < BASIC_TILEMAP_CHUNK_SIZE; tile_id++)
         {
             if (chunk.chunk.data[tile_id] != 0)
@@ -62,10 +69,13 @@ TilePositionToTile BasicTilemapSerial::next()
                     chunk.chunk_position, tile_id);
                 tile.id = chunk.chunk.data[tile_id];
                 tile_id++;
+                chunk_id = ci;
                 return tile;
             }
         }
         tile_id = 0;
+        ci++;
+        chunk_id = ci;
     }
 
     TilePositionToTile tile = {};

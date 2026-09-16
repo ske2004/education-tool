@@ -22,7 +22,7 @@ void UX::end()
 // EVENTS:
 bool UX::clicked()
 {
-    return pass.state->input.k[INPUT_MB_LEFT].held && pass.active();
+    return pass.state->input.k[INPUT_MB_LEFT].pressed && pass.active();
 }
 
 // MARK: Style

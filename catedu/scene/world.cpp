@@ -1,5 +1,6 @@
 #include "world.hpp"
 #include "catedu/core/alloc/allocator.hpp"
+#include "catedu/core/memory/addressfixer.hpp"
 #define BUILDING_DIMENSIONS_W 8
 #define BUILDING_DIMENSIONS_D 8
 
@@ -62,6 +63,7 @@ void Place::destroy()
 Place Place::clone()
 {
     Place world = Place::create();
+    world.interior = this->interior;
 
     for (auto &object : iter(objects))
     {
@@ -162,18 +164,34 @@ World World::clone()
     world.script = (Script *)ALLOCATOR_MALLOC.alloc(sizeof(Script));
     *world.script = script->clone();
 
+    AddressFixer<Place> fixer = AddressFixer<Place>::create();
+
     for (auto &place : iter(places))
     {
+        Place *new_place = world.places.alloc();
+        *new_place = place.clone();
+        fixer.add_mapping(&place, new_place);
+
         if (&place == first)
         {
-            world.first = world.places.alloc();
-            *world.first = place.clone();
-            world.current = world.first;
-            continue;
+            world.first = new_place;
+            world.current = new_place;
         }
-
-        *world.places.alloc() = place.clone();
     }
+
+    for (auto &place : iter(world.places))
+    {
+        for (auto &object : iter(place.objects))
+        {
+            if (object.place)
+            {
+                fixer.add_pointer(&object.place);
+            }
+        }
+    }
+
+    fixer.fix_addresses();
+    fixer.destroy();
 
     return world;
 }
