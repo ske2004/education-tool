@@ -44,13 +44,11 @@ static void event_callback(const sapp_event *event, void *userdata)
 
 static void *alloc_callback(size_t size, void *userdata)
 {
-    printf("Allocation from Sokol: %zu\n", size);
     return ((MallocAllocator *)userdata)->alloc(size);
 }
 
 static void free_callback(void *ptr, void *userdata)
 {
-    printf("Free from Sokol\n");
     ((MallocAllocator *)userdata)->free(ptr);
 }
 

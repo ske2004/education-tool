@@ -42,6 +42,10 @@ Texture Texture::init(const char *png_path)
     Texture result = {};
     int width, height, channels;
     stbi_uc *data = stbi_load(png_path, &width, &height, &channels, 4);
+    if (!data) {
+        fprintf(stderr, "Texture::init: stbi_load failed for '%s'\n", png_path);
+        return result;
+    }
     Buffer data_buf = {data, size_t(width * height * 4)};
     Vector2 data_dims = {(float)width, (float)height};
     result.size = data_dims;

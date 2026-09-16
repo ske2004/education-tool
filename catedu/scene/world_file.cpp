@@ -1,5 +1,6 @@
 #include "world_file.hpp"
 #include <stdio.h>
+#include <vector>
 
 // TODO: Get rid of this and use handles instead
 struct PtrToHandle
@@ -10,8 +11,7 @@ struct PtrToHandle
 
 struct Mapper
 {
-    PtrToHandle mappings[64];
-    size_t count;
+    std::vector<PtrToHandle> mappings;
 };
 
 struct SavingObject
@@ -24,13 +24,12 @@ struct SavingObject
 
 void pushmapper(Mapper *mapper, void *ptr, uint32_t handle)
 {
-    assert(mapper->count < 64);
-    mapper->mappings[mapper->count++] = {ptr, handle + 1};
+    mapper->mappings.push_back({ptr, handle + 1});
 }
 
 uint32_t gethandle(Mapper *mapper, void *ptr)
 {
-    for (size_t i = 0; i < mapper->count; i++)
+    for (size_t i = 0; i < mapper->mappings.size(); i++)
     {
         if (mapper->mappings[i].ptr == ptr)
         {
@@ -43,7 +42,7 @@ uint32_t gethandle(Mapper *mapper, void *ptr)
 
 void *getptr(Mapper *mapper, uint32_t handle)
 {
-    for (size_t i = 0; i < mapper->count; i++)
+    for (size_t i = 0; i < mapper->mappings.size(); i++)
     {
         if (mapper->mappings[i].handle == handle)
         {
@@ -54,22 +53,23 @@ void *getptr(Mapper *mapper, uint32_t handle)
     return nullptr;
 }
 
-void WorldFile::save(const char *path, Dispatcher &dispatcher)
+bool WorldFile::save(const char *path, Dispatcher &dispatcher)
 {
     Mapper mapper = {};
 
     FILE *file = fopen(path, "wb");
     if (!file)
     {
-        return;
+        fprintf(stderr, "WorldFile::save: failed to open '%s' for writing\n", path);
+        return false;
     }
 
     for (auto &place : iter(dispatcher.world.places))
     {
-        pushmapper(&mapper, &place, mapper.count);
+        pushmapper(&mapper, &place, mapper.mappings.size());
     }
 
-    uint32_t place_count = mapper.count;
+    uint32_t place_count = mapper.mappings.size();
     fwrite(&place_count, sizeof(place_count), 1, file);
 
     for (auto &place : iter(dispatcher.world.places))
@@ -112,6 +112,7 @@ void WorldFile::save(const char *path, Dispatcher &dispatcher)
     fclose(file);
 
     dispatcher.dirty = false;
+    return true;
 }
 
 Dispatcher WorldFile::load(const char *path)
