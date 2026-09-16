@@ -37,12 +37,13 @@ UiClassList *UiClassList::add_class(const char *cl, void *data)
     UiClassNode *node = this->root;
     while (true)
     {
-        switch (strcmp(cl, node->sub->name))
+        int cmp = strcmp(cl, node->sub->name);
+        if (cmp == 0)
         {
-        case 0:
-            // class exists...
             return node->sub;
-        case -1:
+        }
+        else if (cmp < 0)
+        {
             if (node->left)
             {
                 node = node->left;
@@ -52,8 +53,9 @@ UiClassList *UiClassList::add_class(const char *cl, void *data)
                 node = node->left = alloc_node(class_nodes, cl);
                 return node->sub;
             }
-            break;
-        case 1:
+        }
+        else
+        {
             if (node->right)
             {
                 node = node->right;
@@ -63,7 +65,6 @@ UiClassList *UiClassList::add_class(const char *cl, void *data)
                 node = node->right = alloc_node(class_nodes, cl);
                 return node->sub;
             }
-            break;
         }
     }
 
@@ -76,18 +77,20 @@ UiClassList *UiClassList::get_class(const char *cl)
 
     while (node)
     {
-        switch (strcmp(cl, node->sub->name))
+        int cmp = strcmp(cl, node->sub->name);
+        if (cmp == 0)
         {
-        case 0:
             return node->sub;
-        case -1:
+        }
+        else if (cmp < 0)
+        {
             node = node->left;
-            break;
-        case 1:
+        }
+        else
+        {
             node = node->right;
-            break;
         }
     }
 
-    return node->sub;
+    return nullptr;
 }

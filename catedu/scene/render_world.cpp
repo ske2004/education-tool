@@ -11,10 +11,10 @@ GenResources get_genres(ResourceSpec &resources)
 {
     GenResources result = {};
     result.box =
-        resources.models.get(resources.find_model_by_name("cube"))->model;
+        resources.models.get_assert(resources.find_model_by_name("cube")).model;
     result.box_shaded =
-        resources.models.get(resources.find_model_by_name("cube_shaded"))
-            ->model;
+        resources.models.get_assert(resources.find_model_by_name("cube_shaded"))
+            .model;
     return result;
 }
 

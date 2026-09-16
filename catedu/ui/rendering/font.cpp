@@ -2,6 +2,7 @@
 #include "make_brush.hpp"
 #include "pass.hpp"
 #include "transform.hpp"
+#include <cstdio>
 
 #define PAGE_IMAGE_SIZE 1024
 
@@ -65,9 +66,11 @@ stbtt_packedchar *get_packed_char(UiFontRenderer *f, int chara)
     }
 
     populate_chunk(f, chara / 256);
+    if (!f->chunks[chara / 256])
+    {
+        return nullptr;
+    }
     return &f->chunks[chara / 256]->packed_chars[chara % 256];
-
-    return nullptr;
 }
 
 static Vector2 get_glyph_size(UiFontRenderer *f, int glyph)
@@ -91,8 +94,13 @@ UiFontRenderer UiFontRenderer::init(UiRenderingCore *core, UiFontDef def,
     result.scale_factor = scale;
 
     FILE *f = fopen(def.path, "rb");
-    assert(f && "Failed to open file");
+    if (!f)
+    {
+        fprintf(stderr, "UiFontRenderer::init: failed to open font '%s'\n", def.path);
+        return result;
+    }
     FileBuffer buf = FileBuffer::read_whole_file(f);
+    fclose(f);
     result.buf = buf;
 
     stbtt_InitFont(&result.font_info, buf.data, 0);

@@ -47,7 +47,7 @@ static Stack<IdPair> get_bodies_except(PhysicsWorld &world, TableId xid)
     return r;
 }
 
-void resolve_bodies(PhysicsBody &a, PhysicsBody b)
+void resolve_bodies(PhysicsBody &a, PhysicsBody &b)
 {
     if (a.dynamic && !b.dynamic)
     {

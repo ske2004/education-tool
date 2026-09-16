@@ -28,6 +28,11 @@ static void write_char(Input &input, uint32_t chr)
 
 static void handle_key_event(Input &input, int key_code, bool down)
 {
+    if (key_code < 0 || key_code >= INPUT_COUNT)
+    {
+        return;
+    }
+
     InputKey *target = input.k;
 
     // If a modifier key is held, use the mk array
