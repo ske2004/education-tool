@@ -17,6 +17,7 @@ uint16_t RenderMeshGenerator::push_vert(float *vertex, size_t count)
     {
         vertices.push_back(vertex[i]);
     }
+    assert(vertices.size() >= vertex_stride && "No vertices to index");
     return vertices.size() / vertex_stride - 1;
 }
 

@@ -1,5 +1,6 @@
 #include "pass.hpp"
 #include "sokol/sokol_app.h"
+#include <cstdio>
 
 UiRenderingPass UiRenderingPass::begin(UiRenderingCore *core)
 {
@@ -48,6 +49,8 @@ void UiRenderingPass::begin_scissor(Rect rect)
 {
     if (this->scissor_count >= 32)
     {
+        fprintf(stderr, "UiRenderingPass::begin_scissor: scissor stack overflow\n");
+        assert(false && "Scissor stack overflow");
         return;
     }
     this->scissor[this->scissor_count++] = rect;

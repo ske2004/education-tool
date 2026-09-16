@@ -31,5 +31,9 @@ double FpsCounter::get()
         avg += this->deltas[i];
     }
 
+    if (avg < 0.0001)
+    {
+        return 0.0;
+    }
     return round(this->count / avg);
 }

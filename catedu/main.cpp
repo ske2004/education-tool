@@ -16,11 +16,15 @@ sapp_desc sokol_main(int argc, char *argv[])
         }
         else if (strcmp(argv[i], "--width") == 0 && i + 1 < argc)
         {
-            width = atoi(argv[++i]);
+            int val = atoi(argv[++i]);
+            if (val > 0)
+                width = val;
         }
         else if (strcmp(argv[i], "--height") == 0 && i + 1 < argc)
         {
-            height = atoi(argv[++i]);
+            int val = atoi(argv[++i]);
+            if (val > 0)
+                height = val;
         }
     }
 

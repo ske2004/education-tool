@@ -72,7 +72,8 @@ void Renderer::begin_pass()
 {
     if (camera.aspect < 0.01f)
     {
-        fprintf(stderr, "WARNING: Camera aspect ratio is too small\n");
+        fprintf(stderr, "WARNING: Camera aspect ratio is too small, clamping\n");
+        camera.aspect = 0.01f;
     }
 
     sg_pass pass = {0};
@@ -87,7 +88,8 @@ void Renderer::begin_pass_offscreen(sg_pass_action pa, sg_attachments att)
 {
     if (camera.aspect < 0.01f)
     {
-        fprintf(stderr, "WARNING: Camera aspect ratio is too small\n");
+        fprintf(stderr, "WARNING: Camera aspect ratio is too small, clamping\n");
+        camera.aspect = 0.01f;
     }
 
     sg_pass pass = {0};

@@ -82,7 +82,7 @@ sapp_desc sokol_setup_default(const char *title, SokolSetup *setup)
     // System settings
     r.enable_clipboard = true;
 
-    // Logging settingsgg
+    // Logging settings
     r.logger.func = slog_func;
 
     return r;
