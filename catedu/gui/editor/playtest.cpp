@@ -186,6 +186,11 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
     }
 
     PhysicsBody &player = physics.bodies.get_assert(this->player);
+    Object *under = world.current->get_object_at((int)floorf(player.area.pos.x), (int)floorf(player.area.pos.y));
+    if (under && under->type == Object::Type::road)
+    {
+        movement *= 2.0f;
+    }
     player.area.pos.x += movement.x;
     player.area.pos.y += movement.y;
 
