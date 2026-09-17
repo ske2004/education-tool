@@ -132,6 +132,10 @@ bool WorldFile::save(const char *path, Dispatcher &dispatcher)
             sn.yes_handle = gethandle(&node_mapper, node.yesno.yes);
             sn.no_handle = gethandle(&node_mapper, node.yesno.no);
         }
+        else if (node.type == ScriptNode::Type::teleport)
+        {
+            sn.yes_handle = gethandle(&mapper, node.teleport.target);
+        }
         else
         {
             strncpy(sn.text, node.say, sizeof(sn.text) - 1);
@@ -247,6 +251,10 @@ Dispatcher WorldFile::load(const char *path)
         {
             strncpy(node->yesno.question, saved_nodes[i].text, sizeof(node->yesno.question) - 1);
         }
+        else if (node->type == ScriptNode::Type::teleport)
+        {
+            // No text data for teleport nodes.
+        }
         else
         {
             strncpy(node->say, saved_nodes[i].text, sizeof(node->say) - 1);
@@ -267,6 +275,10 @@ Dispatcher WorldFile::load(const char *path)
         {
             node.yesno.yes = (ScriptNode *)getptr(&node_mapper, saved_nodes[idx].yes_handle);
             node.yesno.no = (ScriptNode *)getptr(&node_mapper, saved_nodes[idx].no_handle);
+        }
+        else if (node.type == ScriptNode::Type::teleport)
+        {
+            node.teleport.target = (Place *)getptr(&mapper, saved_nodes[idx].yes_handle);
         }
 
         idx++;

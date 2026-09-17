@@ -20,6 +20,7 @@ struct ScriptNode
         event,
         say,
         yesno,
+        teleport,
         count_
     };
 
@@ -35,6 +36,10 @@ struct ScriptNode
             ScriptNode *yes;
             ScriptNode *no;
         } yesno;
+        struct
+        {
+            Place *target;
+        } teleport;
     };
 
     ScriptNode *parent;

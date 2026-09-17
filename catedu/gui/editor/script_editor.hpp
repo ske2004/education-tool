@@ -1,5 +1,6 @@
 #pragma once
 #include "catedu/scene/script.hpp"
+#include "catedu/scene/world.hpp"
 #include "catedu/ui/user.hpp"
 
 struct ScriptCardAction
@@ -36,6 +37,6 @@ struct ScriptEditor
     ScriptCardPalettePool palette;
 
     void show_palette(UiPass &user);
-    void show(UiPass &user);
+    void show(UiPass &user, World &world);
     static ScriptEditor create(Script *script);
 };

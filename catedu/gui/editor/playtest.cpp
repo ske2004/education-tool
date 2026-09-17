@@ -146,6 +146,18 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
                 break;
             }
             break;
+        case ScriptNode::Type::teleport:
+            if (this->current->teleport.target)
+            {
+                switch_target = this->current->teleport.target;
+                transition.begin();
+                this->current = nullptr;
+            }
+            else
+            {
+                this->current = this->current->next;
+            }
+            break;
         default:
             assert(false);
         }

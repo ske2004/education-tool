@@ -1,8 +1,10 @@
 #include "script_editor.hpp"
 #include "catedu/scene/script.hpp"
+#include "catedu/scene/world.hpp"
 #include "catedu/ui/layout/autolayout.hpp"
 #include "catedu/ui/rendering/make_brush.hpp"
 #include "catedu/ui/widgets.hpp"
+#include <cstdio>
 #include <functional>
 
 struct ScriptCard
@@ -11,6 +13,51 @@ struct ScriptCard
     Color color;
     bool embedded;
 };
+
+void get_place_name(Place *target, World &world, char *buf, size_t bufsize)
+{
+    if (!target)
+    {
+        snprintf(buf, bufsize, "None");
+        return;
+    }
+    if (target == world.first)
+    {
+        snprintf(buf, bufsize, "Outdoor");
+        return;
+    }
+    int index = 1;
+    for (auto &place : iter(world.places))
+    {
+        if (&place == target)
+        {
+            snprintf(buf, bufsize, "Building %d", index);
+            return;
+        }
+        if (&place != world.first)
+        {
+            index++;
+        }
+    }
+    snprintf(buf, bufsize, "None");
+}
+
+Place *next_place(Place *current, World &world)
+{
+    bool found = (current == nullptr);
+    for (auto &place : iter(world.places))
+    {
+        if (found)
+        {
+            return &place;
+        }
+        if (&place == current)
+        {
+            found = true;
+        }
+    }
+    return nullptr;
+}
 
 void show_script_card_btn(UiPass &user, ScriptCard card,
                           std::function<void()> cb, std::function<void()> press)
@@ -133,8 +180,8 @@ void show_generic_script_card(ScriptCardDragNDrop &dnd, ScriptNode *node,
 }
 
 ScriptCardAction show_script_card(ScriptCardDragNDrop &dnd, ScriptNode *node,
-                                  UiPass &user, bool shadow = false,
-                                  bool highlight = false)
+                                  UiPass &user, World *world = nullptr,
+                                  bool shadow = false, bool highlight = false)
 {
     ScriptCardAction action = {};
 
@@ -198,6 +245,19 @@ ScriptCardAction show_script_card(ScriptCardDragNDrop &dnd, ScriptNode *node,
                 user.end_generic();
             });
         break;
+    case ScriptNode::Type::teleport:
+        show_generic_script_card(
+            dnd, node, user, {"Teleport...", 0x00CC0099 | colormask}, [&] {
+                if (world)
+                {
+                    char buf[64];
+                    get_place_name(node->teleport.target, *world, buf, sizeof(buf));
+                    show_script_card_btn(
+                        user, {buf, 0xCCCC0099 | colormask, true}, [&] {},
+                        [&] { node->teleport.target = next_place(node->teleport.target, *world); });
+                }
+            });
+        break;
     default:;
     }
 
@@ -232,7 +292,7 @@ void ScriptEditor::show_palette(UiPass &user)
     user.end_generic();
 }
 
-void ScriptEditor::show(UiPass &user)
+void ScriptEditor::show(UiPass &user, World &world)
 {
     user.begin_generic({}, {}, {});
     if (this->current->parent)
@@ -264,11 +324,11 @@ void ScriptEditor::show(UiPass &user)
             user.push_id(size_t(node));
             if (action.parent)
             {
-                show_script_card(dnd, node, user);
+                show_script_card(dnd, node, user, &world);
             }
             else
             {
-                action = show_script_card(dnd, node, user);
+                action = show_script_card(dnd, node, user, &world);
             }
             user.pop_id();
         }
@@ -283,7 +343,7 @@ void ScriptEditor::show(UiPass &user)
             found_place = true;
             user.push_id(size_t(dnd.node) + 1);
             ScriptCardDragNDrop mock;
-            show_script_card(mock, dnd.node, user, false, true);
+            show_script_card(mock, dnd.node, user, &world, false, true);
             user.pop_id();
         }
 
@@ -295,7 +355,7 @@ void ScriptEditor::show(UiPass &user)
     if (dnd.node != nullptr)
     {
         user.push_id(size_t(dnd.node));
-        action = show_script_card(dnd, dnd.node, user, found_place);
+        action = show_script_card(dnd, dnd.node, user, &world, found_place);
         user.pop_id();
     }
 

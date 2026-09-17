@@ -205,7 +205,7 @@ void show_script_panel(UiPass &user, GuiEditor &editor)
     user.begin_generic(el, {}, {});
 
     editor.script_editor.show_palette(user);
-    editor.script_editor.show(user);
+    editor.script_editor.show(user, editor.dispatcher.world);
 
     user.end_generic();
 }
