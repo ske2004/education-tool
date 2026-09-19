@@ -4,6 +4,7 @@
 #include "catedu/genobj/player.hpp"
 #include "catedu/genobj/render.hpp"
 #include "catedu/genobj/road.hpp"
+#include "catedu/genobj/npc.hpp"
 #include "catedu/genobj/tree.hpp"
 #include "catedu/genobj/wall.hpp"
 
@@ -56,6 +57,9 @@ void render_place(Place &place, Renderer &renderer, ResourceSpec &resources)
             break;
         case Object::Type::tree:
             mesh = genmesh_generate_tree();
+            break;
+        case Object::Type::npc:
+            mesh = genmesh_generate_npc();
             break;
         }
 

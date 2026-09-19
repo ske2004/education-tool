@@ -12,6 +12,7 @@ struct Playtest
     World world;
     Place *switch_target;
     ScriptNode *current;
+    ScriptNode *pending;
 
     static Playtest create(World world);
     void destroy();

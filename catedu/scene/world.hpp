@@ -13,7 +13,8 @@ struct Object
         road,
         player,
         wall,
-        tree
+        tree,
+        npc
     } type;
 
     int floors;

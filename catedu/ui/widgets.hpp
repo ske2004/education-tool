@@ -45,6 +45,9 @@ void img(UiPass &user, const char *path, Vector2 scale = {1, 1});
 void img(UiPass &user, UiImageId id, Vector2 scale = {1, 1});
 void label(UiPass &user, const char *text, Vector2 scale = {1, 1},
            UiBrush style = {{0, 0, 0, 255}, {0, 0, 0, 255}});
+void label_wrapped(UiPass &user, const char *text, float max_width,
+                   Vector2 scale = {1, 1},
+                   UiBrush style = {{0, 0, 0, 255}, {0, 0, 0, 255}});
 
 /// @returns Which button was pressed. -1 if none.
 int msgbox(UiPass &user, const char *title, const char *text, MsgBoxType type,

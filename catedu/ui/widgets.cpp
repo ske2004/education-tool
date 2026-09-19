@@ -3,6 +3,7 @@
 #include "catedu/sys/input.hpp"
 #include "catedu/ui/rendering/core.hpp"
 #include "catedu/ui/rendering/make_brush.hpp"
+#include <cstring>
 
 static const Vector4 theme[] = {
     {0.9, 0.9, 1.0, 1.0}, {0.7, 0.7, 0.8, 1.0}, // Button
@@ -345,6 +346,68 @@ void label(UiPass &user, const char *text, Vector2 scale, UiBrush style)
     user.layout.add_element(user.current_node, el);
 }
 
+void label_wrapped(UiPass &user, const char *text, float max_width,
+                   Vector2 scale, UiBrush style)
+{
+    char buf[1024];
+    buf[0] = 0;
+    size_t buf_len = 0;
+
+    float line_width = 0;
+    const char *p = text;
+
+    while (*p)
+    {
+        // Find next word
+        const char *word_start = p;
+        while (*p && *p != ' ' && *p != '\n')
+            p++;
+
+        size_t word_len = p - word_start;
+        char word[256];
+        if (word_len >= sizeof(word))
+            word_len = sizeof(word) - 1;
+        memcpy(word, word_start, word_len);
+        word[word_len] = 0;
+
+        float word_width =
+            user.state->font.bounds_text_utf8({0, 0}, word, scale).siz.x;
+        float space_width =
+            user.state->font.bounds_text_utf8({0, 0}, " ", scale).siz.x;
+
+        if (line_width > 0 && line_width + space_width + word_width > max_width)
+        {
+            if (buf_len < sizeof(buf) - 1)
+                buf[buf_len++] = '\n';
+            line_width = 0;
+        }
+        else if (line_width > 0)
+        {
+            if (buf_len < sizeof(buf) - 1)
+                buf[buf_len++] = ' ';
+            line_width += space_width;
+        }
+
+        for (size_t i = 0; i < word_len && buf_len < sizeof(buf) - 1; i++)
+            buf[buf_len++] = word[i];
+        line_width += word_width;
+
+        // Skip spaces
+        while (*p == ' ')
+            p++;
+        if (*p == '\n')
+        {
+            if (buf_len < sizeof(buf) - 1)
+                buf[buf_len++] = '\n';
+            line_width = 0;
+            p++;
+        }
+    }
+    buf[buf_len] = 0;
+
+    label(user, buf, scale, style);
+}
+
 bool input(UiPass &user, const char *id, char *out, int max)
 {
     bool edited = false;
@@ -436,7 +499,7 @@ int msgbox(UiPass &user, const char *title, const char *text, MsgBoxType type,
     int result = -1;
 
     WindowInfo winfo = {
-        title, rect_center_rect(scaled_screen_rect, {0, 0, 350, 84}), true};
+        title, rect_center_rect(scaled_screen_rect, {0, 0, 450, 200}), true};
     window(user, winfo, [&] {
         user.begin_generic(make_auto({AutoLayout::column}, {0, 0}), {}, {});
 
@@ -456,7 +519,7 @@ int msgbox(UiPass &user, const char *title, const char *text, MsgBoxType type,
             break;
         }
 
-        label(user, text, {1.5, 1.5});
+        label_wrapped(user, text, 400, {1.5, 1.5});
 
         user.end_generic();
         user.begin_generic(make_auto({AutoLayout::row}), {}, {});

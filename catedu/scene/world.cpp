@@ -20,6 +20,8 @@ RectI object_dimensions(Object &object)
         return {(int)ceilf(object.x), (int)ceilf(object.y), 1, 1};
     case Object::Type::tree:
         return {(int)ceilf(object.x) - 1, (int)ceilf(object.y) - 1, 2, 2};
+    case Object::Type::npc:
+        return {(int)ceilf(object.x), (int)ceilf(object.y), 1, 1};
     }
 
     assert(false);
@@ -187,6 +189,19 @@ World World::clone()
             {
                 fixer.add_pointer(&object.place);
             }
+        }
+    }
+
+    // Fix Place pointers inside script nodes (enter event targets, teleport targets)
+    for (auto &node : iter(world.script->nodes))
+    {
+        if (node.place)
+        {
+            fixer.add_pointer(&node.place);
+        }
+        if (node.type == ScriptNode::Type::teleport && node.teleport.target)
+        {
+            fixer.add_pointer(&node.teleport.target);
         }
     }
 

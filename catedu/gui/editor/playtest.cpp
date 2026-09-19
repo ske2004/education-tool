@@ -76,6 +76,15 @@ PhysicsWorld create_bodies(Place *parent, Place &place, TableId &player)
             physics.bodies.allocate(door);
         }
         break;
+        case Object::Type::npc: {
+            PhysicsBody body = {};
+            body.area = {obj.x + 0.5f, obj.y + 0.5f, 1, 1};
+            body.solid = true;
+            body.dynamic = false;
+
+            physics.bodies.allocate(body);
+        }
+        break;
         case Object::Type::player: {
             PhysicsBody body = {};
             body.area = {obj.x, obj.y, 1, 1};
@@ -108,7 +117,7 @@ Playtest Playtest::create(World world)
 {
     TableId player = {};
     PhysicsWorld physics = create_bodies(nullptr, *world.first, player);
-    return {player, physics, world, nullptr, world.script->root};
+    return {player, physics, world, nullptr, world.script->root, nullptr};
 }
 
 void Playtest::destroy()
@@ -151,6 +160,7 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
             {
                 switch_target = this->current->teleport.target;
                 transition.begin();
+                this->pending = this->current->next;
                 this->current = nullptr;
             }
             else
@@ -249,7 +259,12 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
     {
         physics.bodies.deinit();
         world.current = switch_target;
-        if (switch_target != world.first)
+        if (this->pending)
+        {
+            current = this->pending;
+            this->pending = nullptr;
+        }
+        else if (switch_target != world.first)
         {
             current = world.script->acquire_place_event(switch_target);
         }

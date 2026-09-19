@@ -184,10 +184,9 @@ void Dispatcher::enter_place(Object *object)
         int south_y = -12;
         int north_y = south_y + dim - 1;
 
-        // South wall with door gap (skip x=0 and x=1)
+        // South wall (solid, exit trigger is at y=-11)
         for (int x = left_x; x <= right_x; x++)
         {
-            if (x == 0 || x == 1) continue;
             place->place_object({Object::Type::wall, 0, (float)x, (float)south_y});
         }
 

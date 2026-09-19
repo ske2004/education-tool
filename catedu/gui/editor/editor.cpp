@@ -7,6 +7,7 @@
 #include "catedu/gui/transition/transition.hpp"
 #include "catedu/rendering/3d/pbr.hpp"
 #include "catedu/scene/render_world.hpp"
+#include "catedu/scene/sample_world.hpp"
 #include "catedu/scene/world_file.hpp"
 #include "catedu/sys/input.hpp"
 #include "catedu/ui/layout/autolayout.hpp"
@@ -491,6 +492,14 @@ void show_editor_controls(UiPass &user, GuiEditor &editor, bool &return_back)
         if (icon_button(user, "Save", "assets/gui/save.png", color))
         {
             WorldFile::save("assets/world.dat", editor.dispatcher);
+        }
+
+        if (icon_button(user, "Sample", "assets/gui/home.png"))
+        {
+            editor.dispatcher.destroy();
+            editor.dispatcher = generate_sample_world();
+            editor.previous_place = editor.dispatcher.world.current;
+            editor.script_editor = ScriptEditor::create(editor.dispatcher.world.script);
         }
     }
     else
