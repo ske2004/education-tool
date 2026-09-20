@@ -4,6 +4,14 @@
 #include "catedu/genobj/deleter.hpp"
 #include "catedu/genobj/render.hpp"
 #include "catedu/genobj/tree.hpp"
+#include "catedu/genobj/item.hpp"
+#include "catedu/genobj/npc.hpp"
+#include "catedu/genobj/animal.hpp"
+#include "catedu/genobj/prop.hpp"
+#include "catedu/genobj/water.hpp"
+#include "catedu/genobj/high_grass.hpp"
+#include "catedu/genobj/bridge.hpp"
+#include "catedu/genobj/castle.hpp"
 #include "catedu/gui/transition/transition.hpp"
 #include "catedu/rendering/3d/pbr.hpp"
 #include "catedu/scene/render_world.hpp"
@@ -120,7 +128,7 @@ bool object_icon_button(UiPass &user, const char *name, SubEditor::Type type,
         Camera camera = Camera::init(5);
         camera.set_aspect(el.width.value / el.height.value);
 
-        if (type == SubEditor::Type::building)
+        if (type == SubEditor::Type::building || type == SubEditor::Type::castle)
         {
             camera.move(0, 0, -20);
             camera.rotate_around({0, 0, 0}, 45, -45);
@@ -163,6 +171,30 @@ bool object_icon_button(UiPass &user, const char *name, SubEditor::Type type,
             break;
         case SubEditor::Type::tree:
             obj = genmesh_generate_tree();
+            break;
+        case SubEditor::Type::item:
+            obj = genmesh_generate_item();
+            break;
+        case SubEditor::Type::npc:
+            obj = genmesh_generate_npc();
+            break;
+        case SubEditor::Type::animal:
+            obj = genmesh_generate_animal();
+            break;
+        case SubEditor::Type::water:
+            obj = genmesh_generate_water();
+            break;
+        case SubEditor::Type::high_grass:
+            obj = genmesh_generate_high_grass();
+            break;
+        case SubEditor::Type::prop:
+            obj = genmesh_generate_prop();
+            break;
+        case SubEditor::Type::castle:
+            obj = genmesh_generate_castle(4);
+            break;
+        case SubEditor::Type::bridge:
+            obj = genmesh_generate_bridge();
             break;
         }
         genobj_render_object(renderer, get_genres(resources), obj,
@@ -211,13 +243,6 @@ void show_script_panel(UiPass &user, GuiEditor &editor)
     user.end_generic();
 }
 
-void show_character_panel(UiPass &user, GuiEditor &editor,
-                          ResourceSpec &resources, Renderer &renderer)
-{
-    object_icon_button(user, "Player", SubEditor::Type::player,
-                       editor.sub_editor.type, renderer, resources);
-}
-
 void show_build_panel(UiPass &user, GuiEditor &editor, ResourceSpec &resources,
                       Renderer &renderer)
 {
@@ -237,15 +262,28 @@ void show_build_panel(UiPass &user, GuiEditor &editor, ResourceSpec &resources,
         {
             editor.sub_editor.type = SubEditor::Type::wall;
         }
+        elements.push({"Wall", SubEditor::Type::wall});
     }
     else
     {
         elements.push({"Building", SubEditor::Type::building});
+        elements.push({"Castle", SubEditor::Type::castle});
         elements.push({"Road", SubEditor::Type::road});
+        elements.push({"Bridge", SubEditor::Type::bridge});
+        elements.push({"Water", SubEditor::Type::water});
         elements.push({"Tree", SubEditor::Type::tree});
+        elements.push({"Grass", SubEditor::Type::high_grass});
     }
 
-    elements.push({"Wall", SubEditor::Type::wall});
+    elements.push({"Item", SubEditor::Type::item});
+    
+    // Character items
+    elements.push({"Player", SubEditor::Type::player});
+    elements.push({"NPC", SubEditor::Type::npc});
+    elements.push({"Animal", SubEditor::Type::animal});
+    
+    // Miscellaneous
+    elements.push({"Prop", SubEditor::Type::prop});
 
     for (int i = 0; i < elements.count / 2 + 1; i++)
     {
@@ -284,9 +322,6 @@ void show_control_panel(UiPass &user, GuiEditor &editor,
         case SubMode::script:
             lbl = "Script";
             break;
-        case SubMode::character:
-            lbl = "Character";
-            break;
         case SubMode::build:
             lbl = "Build";
             break;
@@ -317,7 +352,6 @@ void show_control_panel(UiPass &user, GuiEditor &editor,
         };
 
         btn("Script", "assets/gui/script.png", SubMode::script);
-        btn("Character", "assets/gui/char.png", SubMode::character);
         btn("Build", "assets/gui/building.png", SubMode::build);
         user.end_generic();
 
@@ -364,9 +398,6 @@ void show_control_panel(UiPass &user, GuiEditor &editor,
     {
     case SubMode::script:
         show_script_panel(user, editor);
-        break;
-    case SubMode::character:
-        show_character_panel(user, editor, resources, renderer);
         break;
     case SubMode::build:
         show_build_panel(user, editor, resources, renderer);
@@ -492,6 +523,7 @@ void show_editor_controls(UiPass &user, GuiEditor &editor, bool &return_back)
         if (icon_button(user, "Save", "assets/gui/save.png", color))
         {
             WorldFile::save("assets/world.dat", editor.dispatcher);
+            WorldFile::export_json("assets/world.json", editor.dispatcher);
         }
 
         if (icon_button(user, "Sample", "assets/gui/home.png"))
@@ -522,6 +554,7 @@ void handle_shortcuts(GuiEditor &editor, Input &input)
     if (input.shortcut(MOD_CTRL, SAPP_KEYCODE_S))
     {
         WorldFile::save("assets/world.dat", editor.dispatcher);
+        WorldFile::export_json("assets/world.json", editor.dispatcher);
     }
 
     if (input.shortcut(MOD_CTRL, SAPP_KEYCODE_Z))
@@ -612,7 +645,7 @@ void show_editor_ui(GuiEditor &editor, UiPass &user, ResourceSpec &resources,
                        : (!editor.playtesting ? editor.dispatcher.world.current
                                               : editor.playtest.world.current);
 
-    render_place(*place, renderer, resources);
+    render_place(*place, renderer, resources, editor.dispatcher.world.time_of_day);
 
     renderer.end_pass();
 
@@ -718,6 +751,30 @@ void SubEditor::update(Dispatcher &disp, Input &input, Camera &camera,
     case Type::tree:
         edit_basic.update(disp, input, camera, viewport, Object::Type::tree);
         break;
+    case Type::item:
+        edit_basic.update(disp, input, camera, viewport, Object::Type::item);
+        break;
+    case Type::npc:
+        edit_basic.update(disp, input, camera, viewport, Object::Type::npc);
+        break;
+    case Type::animal:
+        edit_basic.update(disp, input, camera, viewport, Object::Type::animal);
+        break;
+    case Type::water:
+        edit_line.update(disp, input, camera, viewport, Object::Type::water);
+        break;
+    case Type::high_grass:
+        edit_line.update(disp, input, camera, viewport, Object::Type::high_grass);
+        break;
+    case Type::prop:
+        edit_basic.update(disp, input, camera, viewport, Object::Type::prop);
+        break;
+    case Type::castle:
+        edit_building.update(disp, input, camera, viewport, Object::Type::castle);
+        break;
+    case Type::bridge:
+        edit_line.update(disp, input, camera, viewport, Object::Type::bridge);
+        break;
     }
 }
 
@@ -743,6 +800,34 @@ void SubEditor::render(UiPass &user, Renderer &renderer, Dispatcher &disp,
         break;
     case Type::tree:
         edit_basic.render(renderer, gen_resources, Object::Type::tree);
+        break;
+    case Type::item:
+        edit_basic.render(renderer, gen_resources, Object::Type::item);
+        break;
+    case Type::npc:
+        edit_basic.render(renderer, gen_resources, Object::Type::npc);
+        break;
+    case Type::animal:
+        edit_basic.render(renderer, gen_resources, Object::Type::animal);
+        break;
+    case Type::water:
+        edit_line.render(renderer, disp, gen_resources, Object::Type::water);
+        break;
+    case Type::high_grass:
+        edit_line.render(renderer, disp, gen_resources, Object::Type::high_grass);
+        break;
+    case Type::prop:
+        edit_basic.render(renderer, gen_resources, Object::Type::prop);
+        begin_toolbar(user, "Prop Settings", 1.0, 1.0);
+        label(user, "Prop ID:");
+        input(user, "prop_id_input", edit_basic.prop_id, sizeof(edit_basic.prop_id));
+        end_toolbar(user);
+        break;
+    case Type::castle:
+        edit_building.render(renderer, gen_resources, Object::Type::castle);
+        break;
+    case Type::bridge:
+        edit_line.render(renderer, disp, gen_resources, Object::Type::bridge);
         break;
     }
 }

@@ -13,6 +13,6 @@ struct EditBuilding
     bool valid;
 
     void update(Dispatcher &disp, Input &input, Camera &camera,
-                Vector2 viewport);
-    void render(Renderer &renderer, GenResources &gen_resources);
+                Vector2 viewport, Object::Type type = Object::Type::building);
+    void render(Renderer &renderer, GenResources &gen_resources, Object::Type type = Object::Type::building);
 };

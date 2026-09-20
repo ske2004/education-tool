@@ -23,6 +23,10 @@
 #include "sokol/sokol_glue.h"
 #include "sokol/sokol_log.h"
 
+#include "imgui.h"
+#define SOKOL_IMGUI_IMPL
+#include "sokol/util/sokol_imgui.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "lib/stb/stb_image.h"

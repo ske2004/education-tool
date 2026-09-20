@@ -17,7 +17,6 @@
 enum class SubMode
 {
     build,
-    character,
     script
 };
 
@@ -30,7 +29,15 @@ struct SubEditor
         road,
         player,
         wall,
-        tree
+        tree,
+        item,
+        npc,
+        animal,
+        water,
+        high_grass,
+        prop,
+        bridge,
+        castle
     } type;
 
     EditDelete edit_delete;

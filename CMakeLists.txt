@@ -10,6 +10,8 @@ if (APPLE)
 endif()
 
 file(GLOB_RECURSE CATEDU_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/catedu/*.cpp" ${ADDITIONAL_FILES} "lib/lib-enet/*.c" "lib/umka/src/*.c")
+file(GLOB IMGUI_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui/*.cpp")
+list(APPEND CATEDU_SRC_FILES ${IMGUI_SRC_FILES})
 list(REMOVE_ITEM CATEDU_SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib/umka/src/umka.c)
 
 if (${ENV_TYPE} MATCHES "UNITTEST")
@@ -55,3 +57,4 @@ target_include_directories(${PROJECT_NAME} PUBLIC lib/)
 target_include_directories(${PROJECT_NAME} PUBLIC lib/tau)
 target_include_directories(${PROJECT_NAME} PUBLIC lib/umka/src)
 target_include_directories(${PROJECT_NAME} PUBLIC lib/lib-enet/include)
+target_include_directories(${PROJECT_NAME} PUBLIC lib/imgui)

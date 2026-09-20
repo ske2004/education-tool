@@ -193,7 +193,7 @@ void ViewportServer::frame()
     // Render the current place in the world
     if (world.world.current)
     {
-        render_place(*world.world.current, renderer, res);
+        render_place(*world.world.current, renderer, res, 12.0f);
     }
 
     renderer.end_pass();

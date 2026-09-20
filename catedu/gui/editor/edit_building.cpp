@@ -1,9 +1,10 @@
 #include "edit_building.hpp"
 #include <catedu/genobj/building.hpp>
+#include <catedu/genobj/castle.hpp>
 #include <catedu/genobj/grid.hpp>
 
 void EditBuilding::update(Dispatcher &disp, Input &input, Camera &camera,
-                          Vector2 viewport)
+                          Vector2 viewport, Object::Type type)
 {
     Ray3 pointer_ray = camera.screen_to_world_ray(
         input.mouse_pos, viewport);
@@ -33,7 +34,12 @@ void EditBuilding::update(Dispatcher &disp, Input &input, Camera &camera,
 
     if (input.k[INPUT_MB_LEFT].pressed && placing)
     {
-        disp.place_object({Object::Type::building, floors, x, y});
+        disp.place_object({type, floors, x, y});
+        Place *prev = disp.world.current;
+        if (Object *obj = disp.world.current->get_object_at(x, y)) {
+            disp.enter_place(obj);
+            disp.world.current = prev;
+        }
         placing = false;
     }
     else if (input.k[INPUT_MB_LEFT].pressed)
@@ -44,7 +50,7 @@ void EditBuilding::update(Dispatcher &disp, Input &input, Camera &camera,
             if (Object *obj = disp.world.current->get_object_at(x, y);
                 obj != nullptr)
             {
-                if (obj->type == Object::Type::building)
+                if (obj->type == Object::Type::building || obj->type == Object::Type::castle)
                 {
                     disp.world.script->acquire_place_event(obj->place);
                     disp.enter_place(obj);
@@ -52,20 +58,33 @@ void EditBuilding::update(Dispatcher &disp, Input &input, Camera &camera,
             }
         }
     }
+    else if (input.k[INPUT_MB_RIGHT].pressed)
+    {
+        placing = false;
+    }
 
     valid = disp.world.current->can_place_building(floors, x, y);
 }
 
-void EditBuilding::render(Renderer &renderer, GenResources &gen_resources)
+void EditBuilding::render(Renderer &renderer, GenResources &gen_resources, Object::Type type)
 {
     if (valid)
     {
-        GeneratedObject building = genmesh_generate_building(floors);
-        genobj_render_object(renderer, gen_resources, building,
-                             Matrix4::translate({x, 0, y}));
+        GeneratedObject obj;
+        if (type == Object::Type::castle) {
+            obj = genmesh_generate_castle(floors);
+        } else {
+            obj = genmesh_generate_building(floors);
+        }
+
+        genobj_render_object(renderer, gen_resources, obj,
+                             Matrix4::translate({(float)x, 0, (float)y}));
     }
 
-    GeneratedObject grid = genmesh_generate_grid(16, 16);
-    genobj_render_object(renderer, gen_resources, grid,
-                         Matrix4::translate({x, 0, y}));
+    if (placing)
+    {
+        GeneratedObject grid = genmesh_generate_grid(16, 16);
+        genobj_render_object(renderer, gen_resources, grid,
+                             Matrix4::translate({x, 0, y}));
+    }
 }

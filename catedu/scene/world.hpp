@@ -1,6 +1,7 @@
 #pragma once
 #include "catedu/core/alloc/free_list.hpp"
 #include "catedu/scene/space.hpp"
+#include "catedu/scene/inventory.hpp"
 #include "script.hpp"
 
 struct Place;
@@ -14,12 +15,20 @@ struct Object
         player,
         wall,
         tree,
-        npc
+        npc,
+        item,
+        animal,
+        water,
+        high_grass,
+        prop,
+        bridge,
+        castle
     } type;
 
     int floors;
-    float x, y;
+    float x, y, z;
     Place *place;
+    char id[32];
 };
 
 struct Place
@@ -47,6 +56,9 @@ struct World
     Script *script;
     Place *first;
     Place *current;
+
+    Inventory player_inventory;
+    float time_of_day;
 
     static World create();
     void destroy();

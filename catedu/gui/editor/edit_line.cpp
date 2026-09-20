@@ -3,6 +3,8 @@
 #include "catedu/genobj/grid.hpp"
 #include "catedu/genobj/road.hpp"
 #include "catedu/genobj/wall.hpp"
+#include "catedu/genobj/water.hpp"
+#include "catedu/genobj/high_grass.hpp"
 #include "catedu/scene/world.hpp"
 
 void EditLine::update(Dispatcher &disp, Input &input, Camera &camera,
@@ -38,14 +40,19 @@ void EditLine::update(Dispatcher &disp, Input &input, Camera &camera,
     {
         if (input.k[INPUT_MB_LEFT].released)
         {
-            brezenham(pointer_start.x, pointer_start.y, pointer_end.x,
-                      pointer_end.y, [&](int x, int y) {
-                          Object obj = {};
-                          obj.type = type;
-                          obj.x = x;
-                          obj.y = y;
-                          disp.place_object(obj);
-                      });
+            int min_x = std::min(pointer_start.x, pointer_end.x);
+            int max_x = std::max(pointer_start.x, pointer_end.x);
+            int min_y = std::min(pointer_start.y, pointer_end.y);
+            int max_y = std::max(pointer_start.y, pointer_end.y);
+            for (int x = min_x; x <= max_x; x++) {
+                for (int y = min_y; y <= max_y; y++) {
+                    Object obj = {};
+                    obj.type = type;
+                    obj.x = x;
+                    obj.y = y;
+                    disp.place_object(obj);
+                }
+            }
         }
     }
 }
@@ -79,6 +86,12 @@ void EditLine::render(Renderer &renderer, Dispatcher &disp,
             case Object::Type::road:
                 obj = genmesh_generate_road();
                 break;
+            case Object::Type::water:
+                obj = genmesh_generate_water();
+                break;
+            case Object::Type::high_grass:
+                obj = genmesh_generate_high_grass();
+                break;
             default:
                 assert(false);
                 break;
@@ -88,8 +101,15 @@ void EditLine::render(Renderer &renderer, Dispatcher &disp,
                                  Matrix4::translate({(float)x, 0, (float)y}));
         }
     };
-    brezenham(pointer_start.x, pointer_start.y, pointer_end.x, pointer_end.y,
-              preview);
+    int min_x = std::min(pointer_start.x, pointer_end.x);
+    int max_x = std::max(pointer_start.x, pointer_end.x);
+    int min_y = std::min(pointer_start.y, pointer_end.y);
+    int max_y = std::max(pointer_start.y, pointer_end.y);
+    for (int x = min_x; x <= max_x; x++) {
+        for (int y = min_y; y <= max_y; y++) {
+            preview(x, y);
+        }
+    }
 
     collisiontest.destroy();
 

@@ -21,6 +21,7 @@ struct SavingObject
     int floors;
     float x, y;
     uint32_t place;
+    char id[32];
 };
 
 struct SavingScriptNode
@@ -51,6 +52,57 @@ uint32_t gethandle(Mapper *mapper, void *ptr)
     }
 
     return 0;
+}
+
+static void export_place(FILE *f, Place *place) {
+    fprintf(f, "[\n");
+    bool first = true;
+    for (auto &obj : iter(place->objects)) {
+        if (!first) fprintf(f, ",\n");
+        first = false;
+        
+        const char *type_name = "unknown";
+        switch (obj.type) {
+            case Object::Type::building: type_name = "building"; break;
+            case Object::Type::road: type_name = "road"; break;
+            case Object::Type::wall: type_name = "wall"; break;
+            case Object::Type::tree: type_name = "tree"; break;
+            case Object::Type::npc: type_name = "npc"; break;
+            case Object::Type::item: type_name = "item"; break;
+            case Object::Type::animal: type_name = "animal"; break;
+            case Object::Type::water: type_name = "water"; break;
+            case Object::Type::high_grass: type_name = "high_grass"; break;
+            case Object::Type::player: type_name = "player"; break;
+            case Object::Type::prop: type_name = "prop"; break;
+            case Object::Type::castle: type_name = "castle"; break;
+            case Object::Type::bridge: type_name = "bridge"; break;
+        }
+        
+        fprintf(f, "    {\"type\": \"%s\", \"x\": %f, \"y\": %f, \"floors\": %d", 
+                type_name, obj.x, obj.y, obj.floors);
+                
+        if (obj.type == Object::Type::prop) {
+            fprintf(f, ", \"id\": \"%s\"", obj.id);
+        }
+                
+        if (obj.place) {
+            fprintf(f, ", \"interior\": ");
+            export_place(f, obj.place);
+        }
+        fprintf(f, "}");
+    }
+    fprintf(f, "\n  ]");
+}
+
+void WorldFile::export_json(const char *path, Dispatcher &dispatcher)
+{
+    FILE *f = fopen(path, "w");
+    if (!f) return;
+    
+    fprintf(f, "{\n  \"world\": ");
+    export_place(f, dispatcher.world.first);
+    fprintf(f, "\n}\n");
+    fclose(f);
 }
 
 void *getptr(Mapper *mapper, uint32_t handle)
@@ -104,6 +156,7 @@ bool WorldFile::save(const char *path, Dispatcher &dispatcher)
             so.x = obj.x;
             so.y = obj.y;
             so.place = gethandle(&mapper, obj.place);
+            memcpy(so.id, obj.id, sizeof(so.id));
 
             fwrite(&so, sizeof(so), 1, file);
         }
@@ -215,6 +268,7 @@ Dispatcher WorldFile::load(const char *path)
             obj.x = so.x;
             obj.y = so.y;
             obj.place = (Place *)getptr(&mapper, so.place);
+            memcpy(obj.id, so.id, sizeof(obj.id));
             place->place_object(obj);
         }
     }

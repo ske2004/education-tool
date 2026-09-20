@@ -5,3 +5,7 @@
 #include "sokol/sokol_gfx.h"
 #include "sokol/sokol_log.h"
 #include "sokol/sokol_glue.h"
+
+#include "imgui.h"
+#define SOKOL_IMGUI_IMPL
+#include "sokol/util/sokol_imgui.h"

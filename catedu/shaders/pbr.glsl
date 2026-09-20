@@ -4,6 +4,9 @@ uniform pbr_vs_params {
     vec4 color_mul;
     mat4 model;
     mat4 viewproj;
+    vec4 light_color;
+    vec4 ambient_color;
+    vec3 light_dir;
     float lightness;
 };
 
@@ -20,11 +23,8 @@ out vec4 frag_pos;
 void main() {
     frag_pos = viewproj * model * vec4(position, 1.0);
 
-    vec3 light_dir = -normalize(vec3(0.4, -1.3, 1.0));
-    vec4 light_color = vec4(0.7, 0.5, 1.0, 1.0);
-    vec4 ambient_color = vec4(0.7, 0.7, 0.9, 1.0);
     vec3 transformed_normal = normalize((model * vec4(normal, 0.0)).xyz);
-    float dp = dot(light_dir, transformed_normal);
+    float dp = max(0.0, dot(-normalize(light_dir), transformed_normal));
     vec4 all = vec4(dp, dp, dp, 1) * light_color + ambient_color;
 
     frag_lightness = lightness;

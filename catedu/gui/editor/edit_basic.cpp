@@ -5,6 +5,11 @@
 #include <catedu/genobj/player.hpp>
 #include <catedu/genobj/road.hpp>
 #include <catedu/genobj/wall.hpp>
+#include <catedu/genobj/item.hpp>
+#include <catedu/genobj/npc.hpp>
+#include <catedu/genobj/animal.hpp>
+
+#include "catedu/genobj/prop.hpp"
 
 void EditBasic::update(Dispatcher &disp, Input &input, Camera &camera,
                        Vector2 viewport, Object::Type type)
@@ -20,7 +25,11 @@ void EditBasic::update(Dispatcher &disp, Input &input, Camera &camera,
 
     if (input.k[INPUT_MB_LEFT].pressed)
     {
-        disp.place_object({type, 0, cursor.x, cursor.y});
+        Object obj = {type, 0, cursor.x, cursor.y};
+        if (type == Object::Type::prop) {
+            strncpy(obj.id, this->prop_id, sizeof(obj.id) - 1);
+        }
+        disp.place_object(obj);
     }
 
     valid = disp.world.current->can_place_objtype(type, cursor.x, cursor.y);
@@ -40,6 +49,18 @@ void EditBasic::render(Renderer &renderer, GenResources &gen_resources,
             break;
         case Object::Type::tree:
             obj = genmesh_generate_tree();
+            break;
+        case Object::Type::item:
+            obj = genmesh_generate_item();
+            break;
+        case Object::Type::npc:
+            obj = genmesh_generate_npc();
+            break;
+        case Object::Type::animal:
+            obj = genmesh_generate_animal();
+            break;
+        case Object::Type::prop:
+            obj = genmesh_generate_prop();
             break;
         default:
             assert(false);

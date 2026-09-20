@@ -19,6 +19,9 @@ struct Params
     Vector4 color_mul;
     Matrix4 model;
     Matrix4 viewproj;
+    Vector4 light_color;
+    Vector4 ambient_color;
+    Vector3 light_dir;
     float lightness;
 };
 

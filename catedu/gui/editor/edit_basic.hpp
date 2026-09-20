@@ -8,6 +8,7 @@ struct EditBasic
 {
     Vector2 cursor;
     bool valid;
+    char prop_id[32] = "prop";
 
     void update(Dispatcher &disp, Input &input, Camera &camera,
                 Vector2 viewport, Object::Type type);

@@ -32,9 +32,7 @@ static OffscreenTarget create(UiRenderingCore *core, Vector2i size)
     target.attachment = sg_make_attachments(att_desc);
 
     UiImage img = {};
-#ifdef __EMSCRIPTEN__
-    img.fliph = true;
-#endif
+    img.fliph = !sg_query_features().origin_top_left;
     img.sampler = target.sampler;
     img.image = target.img;
     img.size = {size.x, size.y};

@@ -33,7 +33,7 @@ void main() {
     frag_gaps_x = gaps_x;
     frag_gaps_y = gaps_y;
     if (fliph > 0.5) {
-        frag_uv = 1.0-uv;
+        frag_uv = vec2(uv.x, 1.0-uv.y);
     } else {
         frag_uv = uv;
     }

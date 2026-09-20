@@ -22,6 +22,22 @@ RectI object_dimensions(Object &object)
         return {(int)ceilf(object.x) - 1, (int)ceilf(object.y) - 1, 2, 2};
     case Object::Type::npc:
         return {(int)ceilf(object.x), (int)ceilf(object.y), 1, 1};
+    case Object::Type::item:
+        return {(int)ceilf(object.x), (int)ceilf(object.y), 1, 1};
+    case Object::Type::animal:
+        return {(int)ceilf(object.x), (int)ceilf(object.y), 1, 1};
+    case Object::Type::water:
+        return {(int)ceilf(object.x), (int)ceilf(object.y), 1, 1};
+    case Object::Type::high_grass:
+        return {(int)ceilf(object.x), (int)ceilf(object.y), 1, 1};
+    case Object::Type::prop:
+        return {(int)ceilf(object.x), (int)ceilf(object.y), 1, 1};
+    case Object::Type::bridge:
+        return {(int)ceilf(object.x), (int)ceilf(object.y), 1, 1};
+    case Object::Type::castle:
+        return {(int)ceilf(object.x) - BUILDING_DIMENSIONS_W / 2,
+                (int)ceilf(object.y) - BUILDING_DIMENSIONS_D / 2,
+                BUILDING_DIMENSIONS_W, BUILDING_DIMENSIONS_D};
     }
 
     assert(false);
@@ -141,6 +157,8 @@ World World::create()
     world.script = (Script *)ALLOCATOR_MALLOC.alloc(sizeof(Script));
     *world.script = Script::create(Arena::create(&ALLOCATOR_MALLOC));
 
+    world.time_of_day = 12.0f;
+    world.player_inventory.capacity = 16;
     return world;
 }
 
@@ -165,6 +183,9 @@ World World::clone()
     ALLOCATOR_MALLOC.free(world.script);
     world.script = (Script *)ALLOCATOR_MALLOC.alloc(sizeof(Script));
     *world.script = script->clone();
+
+    world.time_of_day = this->time_of_day;
+    world.player_inventory = this->player_inventory;
 
     AddressFixer<Place> fixer = AddressFixer<Place>::create();
 

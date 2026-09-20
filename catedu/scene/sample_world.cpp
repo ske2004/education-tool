@@ -96,7 +96,7 @@ Dispatcher generate_sample_world()
     house_interior->place_object({Object::Type::wall, 0, -1, -10});
     house_interior->place_object({Object::Type::wall, 0, 2, -9});
 
-    // === Trees ===
+    // === Trees and Grass ===
     outdoor->place_object({Object::Type::tree, 0, 6, 10});
     outdoor->place_object({Object::Type::tree, 0, -6, 10});
     outdoor->place_object({Object::Type::tree, 0, 10, 6});
@@ -105,6 +105,42 @@ Dispatcher generate_sample_world()
     outdoor->place_object({Object::Type::tree, 0, -10, -6});
     outdoor->place_object({Object::Type::tree, 0, 6, -10});
     outdoor->place_object({Object::Type::tree, 0, -6, -10});
+    
+    // High grass patches
+    for (int gx = 8; gx <= 12; gx+=2) {
+        for (int gy = 8; gy <= 12; gy+=2) {
+            outdoor->place_object({Object::Type::high_grass, 0, (float)gx, (float)gy});
+        }
+    }
+    for (int gx = -12; gx <= -8; gx+=2) {
+        for (int gy = 8; gy <= 12; gy+=2) {
+            outdoor->place_object({Object::Type::high_grass, 0, (float)gx, (float)gy});
+        }
+    }
+
+    // === River ===
+    // A river crossing the southern road
+    for (int x = -14; x <= 14; x+=2) {
+        if (x != 0 && x != -2 && x != 2) { // Bridge gap over the road
+            outdoor->place_object({Object::Type::water, 0, (float)x, -16});
+        }
+    }
+    // Bridge (road)
+    outdoor->place_object({Object::Type::road, 0, 0, -16});
+    
+    // === Animals ===
+    outdoor->place_object({Object::Type::animal, 0, 10, 10});
+    outdoor->place_object({Object::Type::animal, 0, -10, 10});
+    outdoor->place_object({Object::Type::animal, 0, -12, 12});
+    
+    // === NPCs ===
+    outdoor->place_object({Object::Type::npc, 0, 4, 4});
+    outdoor->place_object({Object::Type::npc, 0, -4, 4});
+    outdoor->place_object({Object::Type::npc, 0, 4, -4});
+    
+    // === Items ===
+    outdoor->place_object({Object::Type::item, 0, 10, 8});
+    outdoor->place_object({Object::Type::item, 0, -8, -8});
 
     // === Player ===
     outdoor->place_object({Object::Type::player, 0, 0, -10});

@@ -10,10 +10,10 @@
     {                                                                          \
         BUILDING_SIZE_X, FLOOR_HEIGHT, BUILDING_SIZE_Z                         \
     }
-#define BUILDING_COLOR_BOTTOM 0x999999FF
-#define BUILDING_COLOR_MIDDLE 0x999999FF
-#define BUILDING_COLOR_WINDOW 0x000077FF
-#define BUILDING_COLOR_DOOR 0x770000FF
+#define BUILDING_COLOR_BOTTOM 0x607d8bFF
+#define BUILDING_COLOR_MIDDLE 0xcfd8dcFF
+#define BUILDING_COLOR_WINDOW 0x81d4faFF
+#define BUILDING_COLOR_DOOR   0x795548FF
 
 GeneratedObject genmesh_generate_building(int floor_count)
 {
@@ -70,6 +70,12 @@ GeneratedObject genmesh_generate_building(int floor_count)
         box3_translate(construct_box(Baseline::Bottom, {1, 2, 0.1}),
                        {0, 0, -4}),
         Color::hex(BUILDING_COLOR_DOOR), true);
+
+    // Add roof
+    object.push_colored_box(
+        box3_translate(construct_box(Baseline::Bottom, {BUILDING_SIZE_X + 0.4f, 0.4f, BUILDING_SIZE_Z + 0.4f}),
+                       {0, (float)(FLOOR_HEIGHT * (floor_count + 1)), 0}),
+        Color::hex(0x455a64FF), true);
 
     return object;
 }

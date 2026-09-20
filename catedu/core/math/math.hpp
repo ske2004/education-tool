@@ -117,12 +117,12 @@ inline Vector2i operator%=(Vector2i &a, Vector2i b)
     return a = {a.x % b.x, a.y % b.y};
 }
 
-inline bool operator==(Vector2i &a, Vector2i b)
+inline bool operator==(const Vector2i &a, Vector2i b)
 {
     return a.x == b.x && a.y == b.y;
 }
 
-inline bool operator!=(Vector2i &a, Vector2i b)
+inline bool operator!=(const Vector2i &a, Vector2i b)
 {
     return a.x != b.x || a.y != b.y;
 }

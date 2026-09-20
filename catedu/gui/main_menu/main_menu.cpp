@@ -105,7 +105,7 @@ bool GuiMainMenu::show(UX &ux, GuiTransition &transition, World &world,
     this->camera.update({sapp_width(), sapp_height()});
     renderer.camera = camera.cam;
     renderer.begin_pass();
-    render_place(*world.first, renderer, resources);
+    render_place(*world.first, renderer, resources, 12.0f);
     renderer.end_pass();
 
     pass.begin_generic(
