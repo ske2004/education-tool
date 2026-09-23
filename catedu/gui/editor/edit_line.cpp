@@ -2,6 +2,7 @@
 #include "catedu/core/math/brezenham.hpp"
 #include "catedu/genobj/grid.hpp"
 #include "catedu/genobj/road.hpp"
+#include "catedu/genobj/bridge.hpp"
 #include "catedu/genobj/wall.hpp"
 #include "catedu/genobj/water.hpp"
 #include "catedu/genobj/high_grass.hpp"
@@ -85,6 +86,9 @@ void EditLine::render(Renderer &renderer, Dispatcher &disp,
                 break;
             case Object::Type::road:
                 obj = genmesh_generate_road();
+                break;
+            case Object::Type::bridge:
+                obj = genmesh_generate_bridge();
                 break;
             case Object::Type::water:
                 obj = genmesh_generate_water();
