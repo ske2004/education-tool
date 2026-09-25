@@ -24,6 +24,9 @@ GenResources get_genres(ResourceSpec &resources)
     result.box_shaded =
         resources.models.get_assert(resources.find_model_by_name("cube_shaded"))
             .model;
+    result.box_window =
+        resources.models.get_assert(resources.find_model_by_name("cube_window"))
+            .model;
     return result;
 }
 

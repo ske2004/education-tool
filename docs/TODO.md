@@ -6,9 +6,9 @@
 - [x] You should be able to place the player on the roads
 - [x] Place player in the default location in a building
 - [x] Place default walls in the building
-- [ ] Add decals to generated objects
+- [x] Add decals to generated objects
   - [x] Shaded decals
-  - [ ] Window decals
+  - [x] Window decals
 - [ ] UI
   - [ ] Port widgets to ux.cpp
   - [ ] Add a z-index property

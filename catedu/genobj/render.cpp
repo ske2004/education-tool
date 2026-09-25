@@ -61,7 +61,11 @@ static void render_component(Renderer &renderer, const GenResources &resources,
     vs_params.lightness = 0;
     apply_lighting(vs_params, time_of_day);
     
-    if (component.shaded)
+    if (component.window)
+    {
+        renderer.render_model(resources.box_window, vs_params);
+    }
+    else if (component.shaded)
     {
         renderer.render_model(resources.box_shaded, vs_params);
     }

@@ -6,6 +6,7 @@ struct GenResources
 {
     Model box;
     Model box_shaded;
+    Model box_window;
 };
 
 void genobj_render_object(Renderer &renderer, const GenResources &resources,

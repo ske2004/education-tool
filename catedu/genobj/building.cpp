@@ -12,7 +12,6 @@
     }
 #define BUILDING_COLOR_BOTTOM 0x607d8bFF
 #define BUILDING_COLOR_MIDDLE 0xcfd8dcFF
-#define BUILDING_COLOR_WINDOW 0x81d4faFF
 #define BUILDING_COLOR_DOOR   0x795548FF
 
 GeneratedObject genmesh_generate_building(int floor_count)
@@ -34,12 +33,10 @@ GeneratedObject genmesh_generate_building(int floor_count)
         {
             Vector3 pos = {(float)((x * 2 + 0.5) - BUILDING_SIZE_X / 2.0 + 0.5),
                            (float)(FLOOR_HEIGHT * (i + 1)) + 0.5f, 0.0};
-            object.push_colored_box(
-                box3_translate(
-                    construct_box(Baseline::Bottom,
-                                  {0.7, 0.9, BUILDING_SIZE_Z + 0.04}),
-                    pos),
-                Color::hex(BUILDING_COLOR_WINDOW), true);
+            object.push_window_box(box3_translate(
+                construct_box(Baseline::Bottom,
+                              {0.7, 0.9, BUILDING_SIZE_Z + 0.04}),
+                pos));
         }
 
         for (int z = 0; z < BUILDING_SIZE_Z / 2; z++)
@@ -47,12 +44,10 @@ GeneratedObject genmesh_generate_building(int floor_count)
             Vector3 pos = {
                 0.0, (float)(FLOOR_HEIGHT * (i + 1)) + 0.5f,
                 (float)((z * 2 + 0.5) - BUILDING_SIZE_Z / 2.0 + 0.5)};
-            object.push_colored_box(
-                box3_translate(
-                    construct_box(Baseline::Bottom,
-                                  {BUILDING_SIZE_X + 0.04, 0.9, 0.7}),
-                    pos),
-                Color::hex(BUILDING_COLOR_WINDOW), true);
+            object.push_window_box(box3_translate(
+                construct_box(Baseline::Bottom,
+                              {BUILDING_SIZE_X + 0.04, 0.9, 0.7}),
+                pos));
         }
     }
 

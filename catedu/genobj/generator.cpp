@@ -16,3 +16,13 @@ void GeneratedObject::push_colored_box(Box3 box, Color color, bool shaded)
 
     push(component);
 }
+
+void GeneratedObject::push_window_box(Box3 box)
+{
+    GeneratedObjectComponent component = {};
+    component.box = box;
+    component.color = Color::hex(0xFFFFFFFF);
+    component.window = true;
+
+    push(component);
+}

@@ -12,6 +12,7 @@ struct GeneratedObjectComponent
     Box3 box;
     Color color;
     bool shaded;
+    bool window;
 };
 
 struct GeneratedObject
@@ -21,4 +22,5 @@ struct GeneratedObject
 
     void push(GeneratedObjectComponent);
     void push_colored_box(Box3 box, Color color, bool shaded = false);
+    void push_window_box(Box3 box);
 };
