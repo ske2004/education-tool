@@ -58,6 +58,27 @@ bool rect_side_is_horizontal(RectSide &side)
     return side == RectSide::Bottom || side == RectSide::Top;
 }
 
+// Steps `id` to the neighbouring entry in PROP_IDS, wrapping around. An ID
+// that isn't in the list steps to the first or last entry.
+static void cycle_prop_id(char *id, size_t size, int step)
+{
+    int current = -1;
+    for (size_t i = 0; i < PROP_ID_COUNT; i++)
+    {
+        if (strcmp(id, PROP_IDS[i]) == 0)
+        {
+            current = (int)i;
+        }
+    }
+
+    int count = (int)PROP_ID_COUNT;
+    int next = current < 0 ? (step > 0 ? 0 : count - 1)
+                           : ((current + step) % count + count) % count;
+
+    strncpy(id, PROP_IDS[next], size - 1);
+    id[size - 1] = 0;
+}
+
 void begin_toolbar(UiPass &user, const char *name, float align_y, float align_x)
 {
     AutoLayoutElement element = create_main_element(user);
@@ -819,6 +840,14 @@ void SubEditor::render(UiPass &user, Renderer &renderer, Dispatcher &disp,
     case Type::prop:
         edit_basic.render(renderer, gen_resources, Object::Type::prop);
         begin_toolbar(user, "Prop Settings", 1.0, 1.0);
+        if (button(user, "<"))
+        {
+            cycle_prop_id(edit_basic.prop_id, sizeof(edit_basic.prop_id), -1);
+        }
+        if (button(user, ">"))
+        {
+            cycle_prop_id(edit_basic.prop_id, sizeof(edit_basic.prop_id), 1);
+        }
         label(user, "Prop ID:");
         input(user, "prop_id_input", edit_basic.prop_id, sizeof(edit_basic.prop_id));
         end_toolbar(user);

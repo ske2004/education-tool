@@ -27,6 +27,16 @@ GenResources get_genres(ResourceSpec &resources)
     result.box_window =
         resources.models.get_assert(resources.find_model_by_name("cube_window"))
             .model;
+    result.box_invalid =
+        resources.models.get_assert(resources.find_model_by_name("invalid"))
+            .model;
+    result.selector =
+        resources.models.get_assert(resources.find_model_by_name("selector"))
+            .model;
+    result.grass_floor =
+        resources.models.get_assert(resources.find_model_by_name("grass_floor"))
+            .model;
+    result.spec = &resources;
     return result;
 }
 
@@ -80,6 +90,16 @@ void render_place(Place &place, Renderer &renderer, ResourceSpec &resources, flo
 
     for (auto &object : iter(place.objects))
     {
+        Matrix4 at = Matrix4::translate(
+            {(float)object.x, (float)object.z, (float)object.y});
+
+        if (object.type == Object::Type::prop)
+        {
+            genobj_render_prop(renderer, gen_resources, object.id, at,
+                               time_of_day);
+            continue;
+        }
+
         GeneratedObject mesh = {};
 
         switch (object.type)
@@ -115,7 +135,6 @@ void render_place(Place &place, Renderer &renderer, ResourceSpec &resources, flo
             mesh = genmesh_generate_high_grass();
             break;
         case Object::Type::prop:
-            mesh = genmesh_generate_prop(object.id);
             break;
         case Object::Type::castle:
             mesh = genmesh_generate_castle(object.floors);
@@ -125,9 +144,7 @@ void render_place(Place &place, Renderer &renderer, ResourceSpec &resources, flo
             break;
         }
 
-        genobj_render_object(
-            renderer, gen_resources, mesh,
-            Matrix4::translate({(float)object.x, (float)object.z, (float)object.y}), time_of_day);
+        genobj_render_object(renderer, gen_resources, mesh, at, time_of_day);
     }
 
     if (place.interior)
@@ -138,7 +155,8 @@ void render_place(Place &place, Renderer &renderer, ResourceSpec &resources, flo
     else
     {
         show_backdrop(renderer, resources, time_of_day);
-        genobj_render_object(renderer, gen_resources,
-                             genmesh_generate_ground(false), Matrix4::identity(), time_of_day);
+        // The floor model's top face sits at y = -0.6.
+        genobj_render_model(renderer, gen_resources.grass_floor,
+                            Matrix4::translate({0, 0.6f, 0}), time_of_day);
     }
 }

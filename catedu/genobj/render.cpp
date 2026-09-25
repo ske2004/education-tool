@@ -1,5 +1,8 @@
 #include "render.hpp"
+#include "prop.hpp"
+#include "catedu/rendering/resource_spec.hpp"
 #include <math.h>
+#include <string.h>
 static Matrix4 box_to_matrix(Box3 box)
 {
     Vector3 min = box.min;
@@ -81,5 +84,42 @@ void genobj_render_object(Renderer &renderer, const GenResources &resources,
     for (size_t i = 0; i < object.num_components; i++)
     {
         render_component(renderer, resources, object.components[i], matrix, time_of_day);
+    }
+}
+
+void genobj_render_model(Renderer &renderer, const Model &model,
+                         Matrix4 matrix, float time_of_day)
+{
+    Params vs_params = {};
+    vs_params.color_mul = {1, 1, 1, 1};
+    vs_params.model = matrix;
+    vs_params.lightness = 0;
+    apply_lighting(vs_params, time_of_day);
+
+    renderer.render_model(model, vs_params);
+}
+
+void genobj_render_prop(Renderer &renderer, const GenResources &resources,
+                        const char *id, Matrix4 matrix, float time_of_day)
+{
+    if (const PropModel *prop = find_prop_model(id))
+    {
+        TableId model_id = resources.spec->find_model_by_name(prop->id);
+        genobj_render_model(
+            renderer, resources.spec->models.get_assert(model_id).model,
+            matrix * Matrix4::translate({0, prop->y_offset, 0}), time_of_day);
+    }
+    else if (id == nullptr || id[0] == 0 || strcmp(id, "prop") == 0 ||
+             genmesh_is_generated_prop(id))
+    {
+        genobj_render_object(renderer, resources, genmesh_generate_prop(id),
+                             matrix, time_of_day);
+    }
+    else
+    {
+        genobj_render_model(renderer, resources.box_invalid,
+                            matrix * Matrix4::translate({0, 0.4f, 0}) *
+                                Matrix4::scale(0.8f),
+                            time_of_day);
     }
 }

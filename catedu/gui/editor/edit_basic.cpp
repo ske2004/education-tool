@@ -38,7 +38,13 @@ void EditBasic::update(Dispatcher &disp, Input &input, Camera &camera,
 void EditBasic::render(Renderer &renderer, GenResources &gen_resources,
                        Object::Type type)
 {
-    if (valid)
+    Matrix4 at = Matrix4::translate({cursor.x, 0, cursor.y});
+
+    if (valid && type == Object::Type::prop)
+    {
+        genobj_render_prop(renderer, gen_resources, prop_id, at);
+    }
+    else if (valid)
     {
         GeneratedObject obj;
 
@@ -59,16 +65,17 @@ void EditBasic::render(Renderer &renderer, GenResources &gen_resources,
         case Object::Type::animal:
             obj = genmesh_generate_animal();
             break;
-        case Object::Type::prop:
-            obj = genmesh_generate_prop();
-            break;
         default:
             assert(false);
             break;
         }
 
-        genobj_render_object(renderer, gen_resources, obj,
-                             Matrix4::translate({cursor.x, 0, cursor.y}));
+        genobj_render_object(renderer, gen_resources, obj, at);
+    }
+    else
+    {
+        genobj_render_model(renderer, gen_resources.selector,
+                            at * Matrix4::translate({0, 0.5f, 0}));
     }
 
     GeneratedObject grid = genmesh_generate_grid(16, 16);
