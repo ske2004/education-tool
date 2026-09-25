@@ -97,11 +97,11 @@ TEST(EditBasic, InvalidAfterPlacement)
 
     // First click places the object
     Input click = make_test_input_click();
-    edit.update(disp, click, cam, TEST_VIEWPORT, Object::Type::player);
+    edit.update(disp, click, cam, TEST_VIEWPORT, Object::Type::tree);
 
     // Same position should now be invalid
     Input input = make_test_input();
-    edit.update(disp, input, cam, TEST_VIEWPORT, Object::Type::player);
+    edit.update(disp, input, cam, TEST_VIEWPORT, Object::Type::tree);
     CHECK_FALSE(edit.valid);
 
     disp.destroy();
@@ -452,6 +452,99 @@ TEST(EditDelete, NoRemovalWithoutClick)
     CHECK_TRUE(edit.has_target);
     Object *obj = disp.world.current->get_object_at(basic.cursor.x, basic.cursor.y);
     CHECK_TRUE(obj != nullptr);
+
+    disp.destroy();
+}
+
+// ============================================================================
+// Player placement tests
+// ============================================================================
+
+TEST(PlayerPlacement, CanPlaceOnRoad)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    disp.place_object({Object::Type::road, 0, 0, 0});
+    disp.place_object({Object::Type::player, 0, 0, 0});
+
+    Object *player = disp.world.current->get_object_at(0, 0, Object::Type::player);
+    CHECK_TRUE(player != nullptr);
+    // Plain lookups still return the road the player stands on
+    CHECK_EQ((int)disp.world.current->get_object_at(0, 0)->type,
+             (int)Object::Type::road);
+
+    disp.destroy();
+}
+
+TEST(PlayerPlacement, CannotPlaceOnWall)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    disp.place_object({Object::Type::wall, 0, 0, 0});
+    CHECK_FALSE(disp.world.current->can_place_objtype(Object::Type::player, 0, 0));
+
+    disp.destroy();
+}
+
+TEST(PlayerPlacement, InvalidPlacementKeepsExistingPlayer)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    disp.place_object({Object::Type::player, 0, 10, 10});
+    disp.place_object({Object::Type::wall, 0, 0, 0});
+    disp.place_object({Object::Type::player, 0, 0, 0});
+
+    CHECK_TRUE(disp.world.current->get_object_at(10, 10, Object::Type::player) != nullptr);
+
+    disp.destroy();
+}
+
+TEST(PlayerPlacement, ObjectsCannotBePlacedOnPlayer)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    disp.place_object({Object::Type::player, 0, 0, 0});
+    CHECK_FALSE(disp.world.current->can_place_objtype(Object::Type::tree, 0, 0));
+    CHECK_FALSE(disp.world.current->can_place_building(1, 0, 0));
+    CHECK_TRUE(disp.world.current->can_place_objtype(Object::Type::road, 0, 0));
+
+    disp.destroy();
+}
+
+TEST(PlayerPlacement, UndoRoadUnderPlayerRemovesRoad)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    disp.place_object({Object::Type::player, 0, 0, 0});
+    disp.place_object({Object::Type::road, 0, 0, 0});
+    disp.undo();
+
+    CHECK_TRUE(disp.world.current->get_object_at(0, 0, Object::Type::road) == nullptr);
+    CHECK_TRUE(disp.world.current->get_object_at(0, 0, Object::Type::player) != nullptr);
+
+    disp.destroy();
+}
+
+TEST(PlayerPlacement, DeleteTargetsPlayerOnRoad)
+{
+    Dispatcher disp = make_test_dispatcher();
+    Camera cam = make_test_camera();
+    EditDelete edit = {};
+    Input input = make_test_input();
+
+    EditBasic basic = {};
+    basic.update(disp, input, cam, TEST_VIEWPORT, Object::Type::road);
+
+    disp.place_object({Object::Type::road, 0, basic.cursor.x, basic.cursor.y});
+    disp.place_object({Object::Type::player, 0, basic.cursor.x, basic.cursor.y});
+
+    Input held = make_test_input_held();
+    edit.update(disp, held, cam, TEST_VIEWPORT);
+
+    CHECK_TRUE(disp.world.current->get_object_at(basic.cursor.x, basic.cursor.y,
+                                                 Object::Type::player) == nullptr);
+    CHECK_TRUE(disp.world.current->get_object_at(basic.cursor.x, basic.cursor.y,
+                                                 Object::Type::road) != nullptr);
 
     disp.destroy();
 }

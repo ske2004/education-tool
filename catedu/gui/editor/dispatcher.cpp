@@ -6,9 +6,10 @@ void unperform_op(EditOp &op, World *world)
     switch (op.type)
     {
     case EditOp::Type::place:
-        assert(world->current->get_object_at(op.object.x, op.object.y) !=
-               nullptr);
-        world->current->remove_object(op.object.x, op.object.y);
+        assert(world->current->get_object_at(op.object.x, op.object.y,
+                                             op.object.type) != nullptr);
+        world->current->remove_object(op.object.x, op.object.y,
+                                      op.object.type);
         return;
         break;
     case EditOp::Type::remove:
@@ -39,11 +40,13 @@ bool perform_op(EditOp &op, World *world)
         return world->current->place_object(op.object) != nullptr;
         break;
     case EditOp::Type::remove:
-        if (world->current->get_object_at(op.object.x, op.object.y) == nullptr)
+        if (world->current->get_object_at(op.object.x, op.object.y,
+                                          op.object.type) == nullptr)
         {
             return false;
         }
-        world->current->remove_object(op.object.x, op.object.y);
+        world->current->remove_object(op.object.x, op.object.y,
+                                      op.object.type);
         return true;
         break;
     case EditOp::Type::noop:
@@ -102,6 +105,12 @@ void Dispatcher::place_object(Object object)
 
     if (object.type == Object::Type::player)
     {
+        // Don't remove the old player if the new one can't be placed.
+        if (!world.current->can_place_objtype(object.type, object.x, object.y))
+        {
+            return;
+        }
+
         struct Pos { int x, y; };
         Stack<Pos> to_remove = {};
         for (auto &obj : iter(world.current->objects))
@@ -113,7 +122,7 @@ void Dispatcher::place_object(Object object)
         }
         for (size_t i = 0; i < to_remove.count; i++)
         {
-            remove_object(to_remove[i].x, to_remove[i].y);
+            remove_object(to_remove[i].x, to_remove[i].y, Object::Type::player);
         }
         to_remove.deinit();
     }
@@ -127,7 +136,16 @@ void Dispatcher::place_object(Object object)
 
 void Dispatcher::remove_object(int x, int y)
 {
-    Object *obj = world.current->get_object_at(x, y);
+    remove_object(world.current->get_object_at(x, y));
+}
+
+void Dispatcher::remove_object(int x, int y, Object::Type type)
+{
+    remove_object(world.current->get_object_at(x, y, type));
+}
+
+void Dispatcher::remove_object(Object *obj)
+{
     Place *place_embedding = nullptr;
 
     if (obj == nullptr)

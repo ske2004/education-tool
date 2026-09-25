@@ -42,6 +42,8 @@ struct Dispatcher
 
     void place_object(Object object);
     void remove_object(int x, int y);
+    void remove_object(int x, int y, Object::Type type);
+    void remove_object(Object *obj);
 
     void add_script_node(ScriptNode node);
 

@@ -49,17 +49,58 @@ bool point_in_dimensions(int x, int y, RectI dimensions)
            dimensions.pos.y <= y && dimensions.pos.y + dimensions.siz.y > y;
 }
 
+// The player is a spawn marker that doesn't claim space, so it can share
+// tiles with roads. Lookups prefer the object the player is standing on.
 Object *object_space(int x, int y, FreeList<Object> &objects)
 {
+    Object *player = nullptr;
     for (auto &object : iter(objects))
     {
         if (point_in_dimensions(x, y, object_dimensions(object)))
+        {
+            if (object.type != Object::Type::player)
+            {
+                return &object;
+            }
+            player = &object;
+        }
+    }
+
+    return player;
+}
+
+Object *object_space(int x, int y, Object::Type type, FreeList<Object> &objects)
+{
+    for (auto &object : iter(objects))
+    {
+        if (object.type == type &&
+            point_in_dimensions(x, y, object_dimensions(object)))
         {
             return &object;
         }
     }
 
     return nullptr;
+}
+
+static bool rects_overlap(RectI a, RectI b)
+{
+    return a.pos.x < b.pos.x + b.siz.x && b.pos.x < a.pos.x + a.siz.x &&
+           a.pos.y < b.pos.y + b.siz.y && b.pos.y < a.pos.y + a.siz.y;
+}
+
+static bool region_overlaps_player(RectI region, FreeList<Object> &objects)
+{
+    for (auto &object : iter(objects))
+    {
+        if (object.type == Object::Type::player &&
+            rects_overlap(region, object_dimensions(object)))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 Place Place::create()
@@ -85,7 +126,10 @@ Place Place::clone()
 
     for (auto &object : iter(objects))
     {
-        world.space.claim_region_rect(object_dimensions(object));
+        if (object.type != Object::Type::player)
+        {
+            world.space.claim_region_rect(object_dimensions(object));
+        }
         Object *obj = world.objects.alloc();
         *obj = object;
     }
@@ -93,28 +137,39 @@ Place Place::clone()
     return world;
 }
 
-Object *Place::place_object(Object object)
-{
-    RectI region = object_dimensions(object);
-
-    if (space.is_region_claimed(region))
-    {
-        return nullptr;
-    }
-
-    space.claim_region_rect(region);
-
-    Object *obj = objects.alloc();
-    *obj = object;
-
-    return obj;
-}
-
 bool Place::can_place_building(int floors, int x, int y)
 {
     RectI region = {x - 4, y - 4, 8, 8};
 
-    return !space.is_region_claimed(region);
+    return !space.is_region_claimed(region) &&
+           !region_overlaps_player(region, objects);
+}
+
+static bool can_place_region(Place &place, Object::Type type, RectI region)
+{
+    switch (type)
+    {
+    case Object::Type::player:
+        // Every tile must be free or covered by a road.
+        for (int ty = region.pos.y; ty < region.pos.y + region.siz.y; ty++)
+        {
+            for (int tx = region.pos.x; tx < region.pos.x + region.siz.x; tx++)
+            {
+                if (place.space.is_region_claimed({tx, ty, 1, 1}) &&
+                    object_space(tx, ty, Object::Type::road, place.objects) ==
+                        nullptr)
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    case Object::Type::road:
+        return !place.space.is_region_claimed(region);
+    default:
+        return !place.space.is_region_claimed(region) &&
+               !region_overlaps_player(region, place.objects);
+    }
 }
 
 bool Place::can_place_objtype(Object::Type type, int x, int y)
@@ -123,21 +178,60 @@ bool Place::can_place_objtype(Object::Type type, int x, int y)
     mock.type = type;
     mock.x = x;
     mock.y = y;
-    return !space.is_region_claimed(object_bounds(mock));
+    return can_place_region(*this, type, object_bounds(mock));
+}
+
+Object *Place::place_object(Object object)
+{
+    if (!can_place_region(*this, object.type, object_dimensions(object)))
+    {
+        return nullptr;
+    }
+
+    if (object.type != Object::Type::player)
+    {
+        space.claim_region_rect(object_dimensions(object));
+    }
+
+    Object *obj = objects.alloc();
+    *obj = object;
+
+    return obj;
+}
+
+static void remove_object_ptr(Place &place, Object *obj)
+{
+    if (obj->type != Object::Type::player)
+    {
+        place.space.unclaim_region_rect(object_dimensions(*obj));
+    }
+    place.objects.free(obj);
 }
 
 void Place::remove_object(int x, int y)
 {
     if (Object *obj = object_space(x, y, objects); obj != nullptr)
     {
-        space.unclaim_region_rect(object_dimensions(*obj));
-        objects.free(obj);
+        remove_object_ptr(*this, obj);
+    }
+}
+
+void Place::remove_object(int x, int y, Object::Type type)
+{
+    if (Object *obj = object_space(x, y, type, objects); obj != nullptr)
+    {
+        remove_object_ptr(*this, obj);
     }
 }
 
 Object *Place::get_object_at(int x, int y)
 {
     return object_space(x, y, objects);
+}
+
+Object *Place::get_object_at(int x, int y, Object::Type type)
+{
+    return object_space(x, y, type, objects);
 }
 
 RectI Place::object_bounds(Object &object)

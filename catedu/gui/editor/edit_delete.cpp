@@ -16,7 +16,14 @@ void EditDelete::update(Dispatcher &disp, Input &input, Camera &camera,
     Vector3 at = ray3_at(pointer_ray, t);
     Vector2 pointer = {floorf(at.x), floorf(at.z)};
 
-    Object *obj = disp.world.current->get_object_at(pointer.x, pointer.y);
+    // The player can stand on a road, so target it first.
+    Object *obj = disp.world.current->get_object_at(pointer.x, pointer.y,
+                                                    Object::Type::player);
+    if (!obj)
+    {
+        obj = disp.world.current->get_object_at(pointer.x, pointer.y);
+    }
+
     if (obj)
     {
         has_target = true;
@@ -24,7 +31,7 @@ void EditDelete::update(Dispatcher &disp, Input &input, Camera &camera,
 
         if (input.k[INPUT_MB_LEFT].held)
         {
-            disp.remove_object(pointer.x, pointer.y);
+            disp.remove_object(obj);
         }
     }
     else
