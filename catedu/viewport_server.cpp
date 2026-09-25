@@ -113,7 +113,7 @@ void ViewportServer::init()
 #endif
 
     sg_tricks_init();
-    res = load_resource_spec("./assets/tileset.png");
+    res = load_resource_spec();
     renderer = Renderer::init();
     world = WorldFile::load("assets/world.dat");
 

@@ -208,7 +208,7 @@ void Entry::init()
 
     sg_tricks_init();
 
-    res = load_resource_spec("./assets/tileset.png");
+    res = load_resource_spec();
 
     ui_state = UiState::init("./assets/Roboto-Regular.ttf",
                              "./assets/Roboto-Bold.ttf", sapp_dpi_scale());

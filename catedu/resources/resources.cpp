@@ -7,14 +7,6 @@ struct ModelProto
     int submodel;
 };
 
-struct TileProto
-{
-    const char *name;
-    const char *model_name;
-    bool if_obstacle;
-    int rotation;
-};
-
 const ModelProto model_protos[] = {
     {"invalid", "./assets/models/cube.gltf", 1},
     {"cube", "./assets/models/cube.gltf"},
@@ -37,27 +29,10 @@ const ModelProto model_protos[] = {
     {"npc", "./assets/models/actor.gltf", 1},
     {"tree", "./assets/models/tree.gltf"}};
 
-const TileProto tile_protos[] = {{"barrel", "barrel", true},
-                                 {"counter", "counter", true},
-                                 {"tile", "tile", false},
-                                 {"wall_west", "wall", true, 2},
-                                 {"wall_north", "wall", true, 1},
-                                 {"wall_east", "wall", true, 0},
-                                 {"wall_south", "wall", true, 3},
-                                 {"crate", "crate", true},
-                                 {"pavement", "pavement", false},
-                                 {"wall_wood_west", "wall_wood", true, 2},
-                                 {"wall_wood_north", "wall_wood", true, 1},
-                                 {"wall_wood_east", "wall_wood", true, 0},
-                                 {"wall_wood_south", "wall_wood", true, 3},
-                                 {"woodtile", "woodtile", false},
-                                 {"tree", "tree", true}};
-
-ResourceSpec load_resource_spec(const char *path)
+ResourceSpec load_resource_spec()
 {
     ResourceSpec result = {};
 
-    result.tileset = Texture::init("./assets/test_spritesheet_01.png");
     for (auto &proto : model_protos)
     {
         RawModel raw_model;
@@ -68,13 +43,6 @@ ResourceSpec load_resource_spec(const char *path)
         assert(ok && "Failed to create model");
         raw_model.deinit();
         result.models.allocate({proto.name, model, false});
-    }
-
-    for (auto &proto : tile_protos)
-    {
-        TableId model_id = result.find_model_by_name(proto.model_name);
-        result.tiles.allocate(
-            {proto.name, model_id, proto.if_obstacle, proto.rotation});
     }
 
     return result;
