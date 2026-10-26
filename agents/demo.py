@@ -16,7 +16,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from minds import DEFAULT_EFFORT, DEFAULT_MODEL, Action, ClaudeMind, Persona, ScriptedMind, Situation, supports_effort  # noqa: E402
+from minds import (  # noqa: E402
+    DEFAULT_EFFORT,
+    DEFAULT_MODEL,
+    Action,
+    ClaudeMind,
+    Persona,
+    ScriptedMind,
+    Situation,
+    summarize_memory,
+    supports_effort,
+)
 from town import Town, TownError  # noqa: E402
 from towngen import generate_town  # noqa: E402
 
@@ -97,11 +107,12 @@ class Resident:
 
 
 class Simulation:
-    def __init__(self, town, plan, personas, mind, on_event=None):
+    def __init__(self, town, plan, personas, mind, on_event=None, parallel=False):
         self.town = town
         self.plan = plan
         self.mind = mind
         self.on_event = on_event
+        self.parallel = parallel
         self.places = {location.name: location for location in plan.locations}
         self.buildings = {location.center: location.name for location in plan.locations if location.kind != "park"}
         self.tick = 0
@@ -124,12 +135,34 @@ class Simulation:
         for _ in range(turns):
             self.turn()
 
+    def _remember(self, resident, entry):
+        resident.memory.append(entry)
+        if len(resident.memory) > 24:
+            resident.memory = self.mind.summarize_memory(resident.memory)
+
     def turn(self):
-        # Agents decide in order, so later agents hear what earlier ones said.
-        for resident in self.residents:
-            situation = self.situation(resident)
-            resident.heard = []
-            self.act(resident, self.mind.decide(resident.persona, situation))
+        if self.parallel:
+            import concurrent.futures
+
+            situations = [self.situation(resident) for resident in self.residents]
+            for resident in self.residents:
+                resident.heard = []
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                futures = [
+                    executor.submit(self.mind.decide, r.persona, sit)
+                    for r, sit in zip(self.residents, situations)
+                ]
+                decisions = [f.result() for f in futures]
+
+            for resident, decision in zip(self.residents, decisions):
+                self.act(resident, decision)
+        else:
+            # Agents decide in order, so later agents hear what earlier ones said.
+            for resident in self.residents:
+                situation = self.situation(resident)
+                resident.heard = []
+                self.act(resident, self.mind.decide(resident.persona, situation))
 
         for _ in range(TICKS_PER_TURN):
             self.step()
@@ -145,7 +178,7 @@ class Simulation:
                 if place and place.kind != "park":
                     resident.inside = place.name
                 self._event(resident, "arrive", resident.destination)
-                resident.memory.append(f"{self.clock()} You arrived at {resident.destination}.")
+                self._remember(resident, f"{self.clock()} You arrived at {resident.destination}.")
                 resident.destination = None
         self.frames.append(self._frame())
 
@@ -183,7 +216,11 @@ class Simulation:
         if resident.heard:
             lines.append("Since your last turn you heard:\n" + "\n".join(f'- {speaker}: "{words}"' for speaker, words in resident.heard))
         if resident.memory:
-            lines.append("What you remember from earlier:\n" + "\n".join(f"- {entry}" for entry in resident.memory[-MEMORY:]))
+            if len(resident.memory) > MEMORY and resident.memory[0].startswith("Summary"):
+                shown = [resident.memory[0]] + resident.memory[-(MEMORY - 1):]
+            else:
+                shown = resident.memory[-MEMORY:]
+            lines.append("What you remember from earlier:\n" + "\n".join(f"- {entry}" for entry in shown))
 
         home = self.plan.homes[resident.name].name
         lines.append("Places in town: " + ", ".join(f"{name} (your home)" if name == home else name for name in self.places) + ".")
@@ -213,11 +250,11 @@ class Simulation:
 
         if action.say:
             self._event(resident, "say", action.say)
-            resident.memory.append(f'{self.clock()} You said: "{action.say}"')
+            self._remember(resident, f'{self.clock()} You said: "{action.say}"')
             for other in self.residents:
                 if other is not resident and _distance(resident, other) <= HEARING:
                     other.heard.append((resident.name, action.say))
-                    other.memory.append(f'{self.clock()} {resident.name} said: "{action.say}"')
+                    self._remember(other, f'{self.clock()} {resident.name} said: "{action.say}"')
 
         target = action.go_to
         if not target or target == resident.name:
@@ -235,7 +272,7 @@ class Simulation:
         try:
             steps = self.town.go(resident.id, *tile)
         except TownError:
-            resident.memory.append(f"{self.clock()} You couldn't find a way to {target}.")
+            self._remember(resident, f"{self.clock()} You couldn't find a way to {target}.")
             return
         resident.destination = target
         resident.inside = None
@@ -286,7 +323,7 @@ def _describe_objects(objects, buildings):
     for obj in objects:
         if obj["type"] == "road":
             continue
-        name = buildings.get((obj["x"], obj["y"])) if obj["type"] == "building" else None
+        name = buildings.get((obj["x"], obj["y"])) if obj["type"] in ("building", "castle") else None
         name = name or (obj.get("id") or obj["type"]).replace("_", " ")
         counts[name] = counts.get(name, 0) + 1
 
@@ -340,6 +377,7 @@ def main(argv=None):
     parser.add_argument("--effort", default=DEFAULT_EFFORT, choices=["low", "medium", "high", "xhigh", "max"], help="Claude effort (default: the model's own; Haiku doesn't take one)")
     parser.add_argument("--out", type=Path, default=HERE / "out", help="output directory (default agents/out)")
     parser.add_argument("--quiet", action="store_true", help="don't print what happens")
+    parser.add_argument("--parallel", action="store_true", help="run agent decisions concurrently in each turn")
     args = parser.parse_args(argv)
 
     personas = PERSONAS[: args.agents]
@@ -355,7 +393,7 @@ def main(argv=None):
 
     with Town() as town:
         plan = generate_town(town, [p.name for p in personas], seed=args.seed)
-        simulation = Simulation(town, plan, personas, mind, None if args.quiet else print_event)
+        simulation = Simulation(town, plan, personas, mind, None if args.quiet else print_event, parallel=args.parallel)
         print(f"{len(personas)} residents, {len(plan.locations)} places, {args.turns} turns, decided by {mind_name}.")
         simulation.run(args.turns)
         page = write_outputs(town, simulation, args.out, mind_name)

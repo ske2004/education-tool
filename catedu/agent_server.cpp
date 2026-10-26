@@ -41,11 +41,21 @@ struct Agent
     }
 };
 
+struct SpeechEvent
+{
+    int tick;
+    size_t agent;
+    std::string name;
+    std::string text;
+    Vector2i pos;
+};
+
 struct AgentServer
 {
     Dispatcher world;
     ResourceSpec resources;
     std::vector<Agent> agents;
+    std::vector<SpeechEvent> speech_events;
     int tick;
     FILE *out;
     bool quit;
@@ -161,7 +171,15 @@ static void handle_place(AgentServer &server, const char *line)
 
     object.x = (float)x;
     object.y = (float)y;
-    object.floors = (int)floors;
+    if (object.type == Object::Type::building ||
+        object.type == Object::Type::castle)
+    {
+        object.floors = (int)floors;
+    }
+    else
+    {
+        object.floors = (int)floors;
+    }
     if (object.type == Object::Type::prop)
     {
         json_match_str(line, "id", object.id, sizeof object.id);
@@ -264,6 +282,58 @@ static void handle_stop(AgentServer &server, const char *line)
     }
 }
 
+static void handle_say(AgentServer &server, const char *line)
+{
+    Agent *agent = command_agent(server, line);
+    if (!agent)
+    {
+        return;
+    }
+
+    char text[512] = {};
+    if (!json_match_str(line, "text", text, sizeof text))
+    {
+        reply_error(server, "text is required");
+        return;
+    }
+
+    SpeechEvent ev = {};
+    ev.tick = server.tick;
+    ev.agent = (size_t)(agent - server.agents.data());
+    ev.name = agent->name;
+    ev.text = text;
+    ev.pos = agent->pos;
+
+    server.speech_events.push_back(ev);
+    if (server.speech_events.size() > 500)
+    {
+        server.speech_events.erase(server.speech_events.begin(),
+                                   server.speech_events.begin() + 100);
+    }
+
+    reply(server, "{\"ok\":true}");
+}
+
+static void handle_speech(AgentServer &server)
+{
+    std::string json = "{\"ok\":true,\"events\":[";
+    for (size_t i = 0; i < server.speech_events.size(); i++)
+    {
+        if (i)
+        {
+            json += ',';
+        }
+        const SpeechEvent &ev = server.speech_events[i];
+        appendf(json, "{\"tick\":%d,\"agent\":%zu,\"name\":", ev.tick, ev.agent);
+        append_json_string(json, ev.name.c_str());
+        json += ",\"text\":";
+        append_json_string(json, ev.text.c_str());
+        appendf(json, ",\"x\":%d,\"y\":%d}", ev.pos.x, ev.pos.y);
+    }
+    json += "]}";
+    reply(server, json);
+}
+
 static void handle_step(AgentServer &server, const char *line)
 {
     double ticks = 1;
@@ -360,6 +430,22 @@ static void handle_observe(AgentServer &server, const char *line)
         json.pop_back();
         appendf(json, ",\"distance\":%.1f}", distance);
     }
+    json += "],\"speech\":[";
+    bool first_speech = true;
+    for (const SpeechEvent &ev : server.speech_events)
+    {
+        float distance = tile_distance(agent->pos, ev.pos.x, ev.pos.y);
+        if (distance <= radius)
+        {
+            json += first_speech ? "" : ",";
+            first_speech = false;
+            appendf(json, "{\"tick\":%d,\"agent\":%zu,\"name\":", ev.tick, ev.agent);
+            append_json_string(json, ev.name.c_str());
+            json += ",\"text\":";
+            append_json_string(json, ev.text.c_str());
+            appendf(json, ",\"distance\":%.1f}", distance);
+        }
+    }
     json += "]}";
     reply(server, json);
 }
@@ -379,6 +465,7 @@ static void handle_command(AgentServer &server, const char *line)
         server.world.destroy();
         server.world = Dispatcher::create();
         server.agents.clear();
+        server.speech_events.clear();
         server.tick = 0;
         reply(server, "{\"ok\":true}");
     }
@@ -401,6 +488,7 @@ static void handle_command(AgentServer &server, const char *line)
                 server.world.destroy();
                 server.world = WorldFile::load(path);
                 server.agents.clear();
+                server.speech_events.clear();
                 server.tick = 0;
                 ok = true;
             }
@@ -452,6 +540,14 @@ static void handle_command(AgentServer &server, const char *line)
     else if (strcmp(cmd, "observe") == 0)
     {
         handle_observe(server, line);
+    }
+    else if (strcmp(cmd, "say") == 0)
+    {
+        handle_say(server, line);
+    }
+    else if (strcmp(cmd, "speech") == 0 || strcmp(cmd, "events") == 0)
+    {
+        handle_speech(server);
     }
     else if (strcmp(cmd, "agents") == 0)
     {

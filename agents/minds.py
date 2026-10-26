@@ -87,6 +87,64 @@ Keep what you say to one or two short sentences, react to what others say, \
 and don't repeat yourself. Only talk to people who are close enough to hear you."""
 
 
+def summarize_memory(memories):
+    """Condenses older memories into a concise summary entry if len(memories) > 24."""
+    if len(memories) <= 24:
+        return list(memories)
+
+    older = memories[:-12]
+    recent = memories[-12:]
+
+    places = []
+    talked = []
+    other_highlights = []
+
+    earliest_time = ""
+    latest_time = ""
+    if older:
+        first_token = older[0].split()[0] if older[0] else ""
+        if len(first_token) == 5 and ":" in first_token:
+            earliest_time = first_token
+        last_token = older[-1].split()[0] if older[-1] else ""
+        if len(last_token) == 5 and ":" in last_token:
+            latest_time = last_token
+
+    for entry in older:
+        if "arrived at " in entry:
+            place = entry.split("arrived at ", 1)[1].rstrip(".")
+            if place not in places:
+                places.append(place)
+        elif " said: " in entry:
+            speaker = entry.split(" said: ")[0].split()[-1]
+            if speaker != "You" and speaker not in talked:
+                talked.append(speaker)
+        else:
+            clean = entry.strip().rstrip(".")
+            parts = clean.split(" ", 1)
+            if len(parts) == 2 and len(parts[0]) == 5 and ":" in parts[0]:
+                clean = parts[1]
+            if clean and clean not in other_highlights and len(other_highlights) < 4:
+                other_highlights.append(clean)
+
+    summary_parts = []
+    if places:
+        summary_parts.append(f"visited {', '.join(places)}")
+    if talked:
+        summary_parts.append(f"spoke with {', '.join(talked)}")
+    if other_highlights and not (places or talked):
+        summary_parts.append("; ".join(other_highlights))
+    elif not summary_parts:
+        summary_parts.append(f"{len(older)} earlier events")
+
+    if earliest_time and latest_time:
+        prefix = f"Summary ({earliest_time}-{latest_time})"
+    else:
+        prefix = "Summary of earlier events"
+
+    summary_entry = f"{prefix}: " + "; ".join(summary_parts) + "."
+    return [summary_entry] + recent
+
+
 class ClaudeMind:
     """Decides each turn with one Claude request returning a structured action."""
 
@@ -101,8 +159,17 @@ class ClaudeMind:
         self.hearing = hearing
         self.input_tokens = 0
         self.output_tokens = 0
+        self.memories = []
+
+    def summarize_memory(self, memories=None):
+        if memories is None:
+            self.memories = summarize_memory(self.memories)
+            return self.memories
+        return summarize_memory(memories)
 
     def decide(self, persona, situation):
+        if len(self.memories) > 24:
+            self.summarize_memory()
         output_config = {"format": {"type": "json_schema", "schema": action_schema(situation)}}
         if self.effort:
             output_config["effort"] = self.effort
@@ -155,8 +222,17 @@ class ScriptedMind:
         self.stops = {}  # Agent -> index into its routine.
         self.waited = {}  # Agent -> turns spent at the current stop.
         self.greeted = {}  # Agent -> people it already talked to.
+        self.memories = []
+
+    def summarize_memory(self, memories=None):
+        if memories is None:
+            self.memories = summarize_memory(self.memories)
+            return self.memories
+        return summarize_memory(memories)
 
     def decide(self, persona, situation):
+        if len(self.memories) > 24:
+            self.summarize_memory()
         name = persona.name
         stop = self.stops.setdefault(name, 0)
         greeted = self.greeted.setdefault(name, set())

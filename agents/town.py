@@ -154,6 +154,14 @@ class Town:
         reply = self._call("agents")
         return {"tick": reply["tick"], "agents": reply["agents"]}
 
+    def say(self, agent, text):
+        """Records an agent speaking out loud."""
+        self._call("say", agent=agent, text=_plain(text))
+
+    def speech(self):
+        """Recent speech events recorded on the server."""
+        return self._call("speech")["events"]
+
     def observe(self, agent, radius=10):
         """What an agent perceives: itself, and the objects and agents nearby.
 
@@ -161,4 +169,8 @@ class Town:
         their distance, nearest first.
         """
         reply = self._call("observe", agent=agent, radius=radius)
-        return {key: reply[key] for key in ("tick", "self", "objects", "agents")}
+        res = {key: reply[key] for key in ("tick", "self", "objects", "agents")}
+        if "speech" in reply:
+            res["speech"] = reply["speech"]
+        return res
+
