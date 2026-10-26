@@ -26,6 +26,8 @@ struct EditOp
 
     Place *place;
 
+    uint32_t group_id;
+
     EditOp *next;
     EditOp *prev;
 };
@@ -37,8 +39,15 @@ struct Dispatcher
     EditOp *current;
     bool dirty;
 
+    uint32_t next_group_id;
+    uint32_t active_group_id;
+    uint32_t group_depth;
+
     static Dispatcher create();
     void destroy();
+
+    void begin_group();
+    void end_group();
 
     void place_object(Object object);
     void remove_object(int x, int y);

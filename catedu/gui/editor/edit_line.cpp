@@ -14,8 +14,11 @@ void EditLine::update(Dispatcher &disp, Input &input, Camera &camera,
     Ray3 pointer_ray = camera.screen_to_world_ray(
         input.mouse_pos, viewport);
 
-    float t;
-    ray3_vs_horizontal_plane(pointer_ray, -0.5, &t);
+    float t = 0.0f;
+    if (!ray3_vs_horizontal_plane(pointer_ray, 0.0f, &t))
+    {
+        return;
+    }
 
     Vector3 at = ray3_at(pointer_ray, t);
     Vector2 pointer = {floorf(at.x), floorf(at.z)};
@@ -45,6 +48,7 @@ void EditLine::update(Dispatcher &disp, Input &input, Camera &camera,
             int max_x = std::max(pointer_start.x, pointer_end.x);
             int min_y = std::min(pointer_start.y, pointer_end.y);
             int max_y = std::max(pointer_start.y, pointer_end.y);
+            disp.begin_group();
             for (int x = min_x; x <= max_x; x++) {
                 for (int y = min_y; y <= max_y; y++) {
                     Object obj = {};
@@ -54,6 +58,7 @@ void EditLine::update(Dispatcher &disp, Input &input, Camera &camera,
                     disp.place_object(obj);
                 }
             }
+            disp.end_group();
         }
     }
 }

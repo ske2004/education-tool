@@ -133,9 +133,8 @@ UmkaError *UmkaModule::call(const char *module, const char *function,
         result = &dummy;
     }
 
-    assert(_data->user);
-
     _data = data;
+    assert(_data && _data->user);
 
     // TODO: Somehow handle error codes from umkaCall
     umkaCall(umka, offset, nparams, params, result);

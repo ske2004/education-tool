@@ -21,6 +21,7 @@ struct ScriptNode
         say,
         yesno,
         teleport,
+        give_item,
         count_
     };
 

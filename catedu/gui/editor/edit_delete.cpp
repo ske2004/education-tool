@@ -10,8 +10,12 @@ void EditDelete::update(Dispatcher &disp, Input &input, Camera &camera,
     Ray3 pointer_ray = camera.screen_to_world_ray(
         input.mouse_pos, viewport);
 
-    float t;
-    ray3_vs_horizontal_plane(pointer_ray, 0.0, &t);
+    float t = 0.0f;
+    if (!ray3_vs_horizontal_plane(pointer_ray, 0.0f, &t))
+    {
+        has_target = false;
+        return;
+    }
 
     Vector3 at = ray3_at(pointer_ray, t);
     Vector2 pointer = {floorf(at.x), floorf(at.z)};

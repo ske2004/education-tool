@@ -2,6 +2,8 @@
 #include "catedu/ui/layout/autolayout.hpp"
 #include "catedu/ui/rendering/make_brush.hpp"
 #include "catedu/ui/widgets.hpp"
+#include <cstdio>
+#include <cstring>
 
 UX UX::begin(UiState &state)
 {
@@ -111,11 +113,68 @@ UX &UX::column(std::function<void()> cb)
 
 // MARK: Widgets
 #pragma region widgets
+void UX::dropdown(const char *label, const char *options[], int count,
+                  int &selction)
+{
+    if (count <= 0 || options == nullptr)
+    {
+        return;
+    }
+
+    char id[128];
+    snprintf(id, sizeof(id), "%s##dropdown", label ? label : "dd");
+    state->element_storage.push(id, {});
+    UiPersistentElement *pe = state->element_storage.value();
+
+    if (selction < 0)
+    {
+        selction = 0;
+    }
+    if (selction >= count)
+    {
+        selction = count - 1;
+    }
+
+    char btn_text[256];
+    if (label && label[0] != '\0')
+    {
+        snprintf(btn_text, sizeof(btn_text), "%s: %s", label, options[selction]);
+    }
+    else
+    {
+        snprintf(btn_text, sizeof(btn_text), "%s", options[selction]);
+    }
+
+    if (::button(pass, btn_text))
+    {
+        pe->pinned = !pe->pinned;
+    }
+
+    if (pe->pinned)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            if (::button(pass, options[i]))
+            {
+                selction = i;
+                pe->pinned = false;
+            }
+        }
+    }
+
+    state->element_storage.pop();
+}
+
 bool UX::button(const char *text)
 {
     // TODO: Remove the widgets from external access once everything is using
     // this UX structure.
     return ::button(pass, text);
+}
+
+bool UX::input(const char *label, char *buffer, size_t buffer_size)
+{
+    return ::input(this->pass, label, buffer, (int)buffer_size);
 }
 
 UX &UX::label(const char *text)

@@ -1,6 +1,8 @@
 #include "world_file.hpp"
+#include "catedu/sys/json_fields.hpp"
 #include <stdio.h>
 #include <string.h>
+#include <string>
 #include <vector>
 
 // TODO: Get rid of this and use handles instead
@@ -67,7 +69,9 @@ static void export_place(FILE *f, Place *place) {
                 type_name, obj.x, obj.y, obj.floors);
                 
         if (obj.type == Object::Type::prop) {
-            fprintf(f, ", \"id\": \"%s\"", obj.id);
+            std::string escaped_id;
+            append_json_string(escaped_id, obj.id);
+            fprintf(f, ", \"id\": %s", escaped_id.c_str());
         }
                 
         if (obj.place) {
@@ -216,7 +220,11 @@ Dispatcher WorldFile::load(const char *path)
     }
 
     uint32_t count = 0;
-    fread(&count, sizeof(count), 1, file);
+    if (fread(&count, sizeof(count), 1, file) != 1 || count > 10000)
+    {
+        fclose(file);
+        return dispatcher;
+    }
 
     for (size_t i = 0; i < count; i++)
     {
@@ -238,14 +246,28 @@ Dispatcher WorldFile::load(const char *path)
     {
         Place *place = (Place *)getptr(&mapper, i);
 
-        uint32_t count = 0;
-        fread(&count, sizeof(count), 1, file);
-        fread(&place->interior, sizeof(place->interior), 1, file);
+        uint32_t obj_count = 0;
+        if (fread(&obj_count, sizeof(obj_count), 1, file) != 1 ||
+            fread(&place->interior, sizeof(place->interior), 1, file) != 1 ||
+            obj_count > 100000)
+        {
+            fclose(file);
+            return dispatcher;
+        }
 
-        for (size_t i = 0; i < count; i++)
+        for (size_t j = 0; j < obj_count; j++)
         {
             SavingObject so = {};
-            fread(&so, sizeof(so), 1, file);
+            if (fread(&so, sizeof(so), 1, file) != 1)
+            {
+                fclose(file);
+                return dispatcher;
+            }
+
+            if ((int)so.type < 0 || (int)so.type > (int)Object::Type::castle)
+            {
+                continue;
+            }
 
             Object obj = {};
             obj.type = so.type;
@@ -254,12 +276,13 @@ Dispatcher WorldFile::load(const char *path)
             obj.y = so.y;
             obj.place = (Place *)getptr(&mapper, so.place);
             memcpy(obj.id, so.id, sizeof(obj.id));
+            obj.id[sizeof(obj.id) - 1] = '\0';
             place->place_object(obj);
         }
     }
 
     uint32_t node_count = 0;
-    if (fread(&node_count, sizeof(node_count), 1, file) != 1)
+    if (fread(&node_count, sizeof(node_count), 1, file) != 1 || node_count > 100000)
     {
         // Old file with no script section — keep default empty script.
         fclose(file);
@@ -269,7 +292,11 @@ Dispatcher WorldFile::load(const char *path)
     std::vector<SavingScriptNode> saved_nodes(node_count);
     if (node_count > 0)
     {
-        fread(saved_nodes.data(), sizeof(SavingScriptNode), node_count, file);
+        if (fread(saved_nodes.data(), sizeof(SavingScriptNode), node_count, file) != node_count)
+        {
+            fclose(file);
+            return dispatcher;
+        }
     }
 
     // Replace default empty script with a fresh one.
@@ -285,6 +312,10 @@ Dispatcher WorldFile::load(const char *path)
         *node = {};
         node->event = saved_nodes[i].event;
         node->type = saved_nodes[i].type;
+        if ((int)node->type < 0 || (int)node->type >= (int)ScriptNode::Type::count_)
+        {
+            node->type = ScriptNode::Type::say;
+        }
 
         if (node->type == ScriptNode::Type::yesno)
         {
@@ -324,19 +355,29 @@ Dispatcher WorldFile::load(const char *path)
     }
 
     uint32_t global_events_count = 0;
-    fread(&global_events_count, sizeof(global_events_count), 1, file);
-
-    for (uint32_t i = 0; i < global_events_count; i++)
+    if (fread(&global_events_count, sizeof(global_events_count), 1, file) == 1 &&
+        global_events_count <= 100000)
     {
-        uint32_t handle = 0;
-        fread(&handle, sizeof(handle), 1, file);
-        ScriptNode *node = (ScriptNode *)getptr(&node_mapper, handle);
-        dispatcher.world.script->global_events.push(node);
+        for (uint32_t i = 0; i < global_events_count; i++)
+        {
+            uint32_t handle = 0;
+            if (fread(&handle, sizeof(handle), 1, file) != 1)
+            {
+                break;
+            }
+            ScriptNode *node = (ScriptNode *)getptr(&node_mapper, handle);
+            if (node)
+            {
+                dispatcher.world.script->global_events.push(node);
+            }
+        }
     }
 
     uint32_t root_handle = 0;
-    fread(&root_handle, sizeof(root_handle), 1, file);
-    dispatcher.world.script->root = (ScriptNode *)getptr(&node_mapper, root_handle);
+    if (fread(&root_handle, sizeof(root_handle), 1, file) == 1)
+    {
+        dispatcher.world.script->root = (ScriptNode *)getptr(&node_mapper, root_handle);
+    }
 
     fclose(file);
 

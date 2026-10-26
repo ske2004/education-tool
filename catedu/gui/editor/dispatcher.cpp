@@ -1,21 +1,64 @@
 #include "dispatcher.hpp"
 #include "catedu/core/alloc/allocator.hpp"
 
+static void destroy_op_embedding(EditOp &op)
+{
+    if (op.has_place_embedding)
+    {
+        op.place_embedding.destroy();
+        op.has_place_embedding = false;
+        op.place_embedding = {};
+    }
+}
+
+static void remap_script_place(Script *script, Place *old_place, Place *new_place)
+{
+    if (!script || !old_place || old_place == new_place)
+    {
+        return;
+    }
+    for (auto &node : iter(script->nodes))
+    {
+        if (node.place == old_place)
+        {
+            node.place = new_place;
+        }
+        if (node.type == ScriptNode::Type::teleport &&
+            node.teleport.target == old_place)
+        {
+            node.teleport.target = new_place;
+        }
+    }
+}
+
 void unperform_op(EditOp &op, World *world)
 {
     switch (op.type)
     {
-    case EditOp::Type::place:
-        assert(world->current->get_object_at(op.object.x, op.object.y,
-                                             op.object.type) != nullptr);
+    case EditOp::Type::place: {
+        Object *obj = world->current->get_object_at(op.object.x, op.object.y,
+                                                    op.object.type);
+        assert(obj != nullptr);
+        if (obj->place && obj->place != world->first)
+        {
+            destroy_op_embedding(op);
+            op.has_place_embedding = true;
+            op.place_embedding = obj->place->clone();
+            op.object.place = obj->place;
+            obj->place->destroy();
+            world->places.free(obj->place);
+            obj->place = nullptr;
+        }
         world->current->remove_object(op.object.x, op.object.y,
                                       op.object.type);
         return;
-        break;
+    }
     case EditOp::Type::remove:
         if (op.has_place_embedding)
         {
-            op.object.place = world->places.alloc(op.place_embedding);
+            Place *old_place = op.object.place;
+            op.object.place = world->places.alloc(op.place_embedding.clone());
+            remap_script_place(world->script, old_place, op.object.place);
         }
         {
             Object *placed = world->current->place_object(op.object);
@@ -23,7 +66,6 @@ void unperform_op(EditOp &op, World *world)
             (void)placed;
         }
         return;
-        break;
     case EditOp::Type::noop:
         assert(false);
         break;
@@ -37,21 +79,36 @@ bool perform_op(EditOp &op, World *world)
     switch (op.type)
     {
     case EditOp::Type::place:
+        if (op.has_place_embedding)
+        {
+            Place *old_place = op.object.place;
+            op.object.place = world->places.alloc(op.place_embedding.clone());
+            remap_script_place(world->script, old_place, op.object.place);
+        }
         return world->current->place_object(op.object) != nullptr;
-        break;
-    case EditOp::Type::remove:
-        if (world->current->get_object_at(op.object.x, op.object.y,
-                                          op.object.type) == nullptr)
+    case EditOp::Type::remove: {
+        Object *obj = world->current->get_object_at(op.object.x, op.object.y,
+                                                    op.object.type);
+        if (obj == nullptr)
         {
             return false;
+        }
+        if (obj->place && obj->place != world->first)
+        {
+            destroy_op_embedding(op);
+            op.has_place_embedding = true;
+            op.place_embedding = obj->place->clone();
+            op.object.place = obj->place;
+            obj->place->destroy();
+            world->places.free(obj->place);
+            obj->place = nullptr;
         }
         world->current->remove_object(op.object.x, op.object.y,
                                       op.object.type);
         return true;
-        break;
+    }
     case EditOp::Type::noop:
         assert(false);
-        break;
         break;
     }
 
@@ -63,6 +120,10 @@ static void append(Dispatcher &disp, EditOp op)
 {
     assert(disp.current);
     op.place = disp.world.current;
+    if (disp.active_group_id != 0)
+    {
+        op.group_id = disp.active_group_id;
+    }
 
     EditOp *alloc = disp.history.alloc();
     *alloc = op;
@@ -70,8 +131,10 @@ static void append(Dispatcher &disp, EditOp op)
     EditOp *orphan = disp.current->next;
     while (orphan)
     {
+        EditOp *next = orphan->next;
+        destroy_op_embedding(*orphan);
         disp.history.free(orphan);
-        orphan = orphan->next;
+        orphan = next;
     }
 
     disp.current->next = alloc;
@@ -88,11 +151,43 @@ Dispatcher Dispatcher::create()
     *dispatcher.current = {};
     dispatcher.current->type = EditOp::Type::noop;
     dispatcher.world = World::create();
+    dispatcher.next_group_id = 1;
+    dispatcher.active_group_id = 0;
+    dispatcher.group_depth = 0;
     return dispatcher;
+}
+
+void Dispatcher::begin_group()
+{
+    if (active_group_id == 0)
+    {
+        active_group_id = next_group_id++;
+    }
+    group_depth++;
+}
+
+void Dispatcher::end_group()
+{
+    if (group_depth > 0)
+    {
+        group_depth--;
+        if (group_depth == 0)
+        {
+            active_group_id = 0;
+        }
+    }
+    else
+    {
+        active_group_id = 0;
+    }
 }
 
 void Dispatcher::destroy()
 {
+    for (auto &op : iter(history))
+    {
+        destroy_op_embedding(op);
+    }
     world.destroy();
     history.destroy();
 }
@@ -110,6 +205,8 @@ void Dispatcher::place_object(Object object)
         {
             return;
         }
+
+        begin_group();
 
         struct Pos { int x, y; };
         Stack<Pos> to_remove = {};
@@ -132,6 +229,11 @@ void Dispatcher::place_object(Object object)
         dirty = true;
         append(*this, op);
     }
+
+    if (object.type == Object::Type::player)
+    {
+        end_group();
+    }
 }
 
 void Dispatcher::remove_object(int x, int y)
@@ -146,32 +248,16 @@ void Dispatcher::remove_object(int x, int y, Object::Type type)
 
 void Dispatcher::remove_object(Object *obj)
 {
-    Place *place_embedding = nullptr;
-
     if (obj == nullptr)
     {
         return;
     }
-
-    if (obj->place && obj->place != world.first)
-    {
-        place_embedding = obj->place;
-    }
-
-    obj->place = nullptr;
 
     EditOp op = {};
     op.type = EditOp::Type::remove;
     op.object = *obj;
     op.object.x = obj->x;
     op.object.y = obj->y;
-
-    if (place_embedding)
-    {
-        op.has_place_embedding = true;
-        op.place_embedding = place_embedding->clone();
-        world.places.free(place_embedding);
-    }
 
     if (perform_op(op, &world))
     {
@@ -242,22 +328,45 @@ void Dispatcher::undo()
     }
 
     dirty = true;
+    uint32_t gid = current->group_id;
     unperform_op(*current, &world);
-
     current = current->prev;
+
+    if (gid != 0)
+    {
+        while (current && current->prev && current->place == world.current &&
+               current->group_id == gid)
+        {
+            unperform_op(*current, &world);
+            current = current->prev;
+        }
+    }
 }
 
 void Dispatcher::redo()
 {
-    if (!current || !current->next || current->place != world.current)
+    if (!current || !current->next || current->next->place != world.current)
     {
         return;
     }
 
-    current = current->next;
+    uint32_t gid = current->next->group_id;
 
+    current = current->next;
     dirty = true;
     bool ok = perform_op(*current, &world);
     assert(ok);
     (void)ok;
+
+    if (gid != 0)
+    {
+        while (current->next && current->next->place == world.current &&
+               current->next->group_id == gid)
+        {
+            current = current->next;
+            bool ok = perform_op(*current, &world);
+            assert(ok);
+            (void)ok;
+        }
+    }
 }

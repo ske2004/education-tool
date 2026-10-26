@@ -18,7 +18,10 @@ GeneratedObject genmesh_generate_building(int floor_count)
 {
     GeneratedObject object = {};
 
-    assert(floor_count > 0);
+    if (floor_count < 1)
+    {
+        floor_count = 1;
+    }
 
     if (floor_count--)
     {
@@ -26,8 +29,8 @@ GeneratedObject genmesh_generate_building(int floor_count)
             construct_box(Baseline::Bottom, FLOOR_DIMENSIONS),
             Color::hex(BUILDING_COLOR_BOTTOM), true);
     }
-    // add windows
-    for (int i = 0; i < floor_count; i++)
+    // add windows (leave room for middle body, door, and roof components)
+    for (int i = 0; i < floor_count && object.num_components + 8 + 3 <= COMPONENT_COUNT; i++)
     {
         for (int x = 0; x < BUILDING_SIZE_X / 2; x++)
         {

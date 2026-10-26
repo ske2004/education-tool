@@ -435,6 +435,10 @@ void show_control_panel(UiPass &user, GuiEditor &editor,
         {
             user.state->element_storage.value()->scroll.y = 0;
         }
+        if (user.state->element_storage.value()->scroll.y < -600)
+        {
+            user.state->element_storage.value()->scroll.y = -600;
+        }
     }
 
     user.end_generic();

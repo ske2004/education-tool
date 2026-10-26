@@ -40,6 +40,7 @@ struct UX
     void dropdown(const char *label, const char *options[], int count,
                   int &selction);
     bool button(const char *text);
+    bool input(const char *label, char *buffer, size_t buffer_size);
     UX &label(const char *text);
     UX &heading(const char *text, int size = 0);
 };

@@ -52,21 +52,37 @@ bool point_in_dimensions(int x, int y, RectI dimensions)
 
 // The player is a spawn marker that doesn't claim space, so it can share
 // tiles with roads. Lookups prefer the object the player is standing on.
+// Lookups also prefer bridge over water so bridges are returned over water.
 Object *object_space(int x, int y, FreeList<Object> &objects)
 {
     Object *player = nullptr;
+    Object *water = nullptr;
     for (auto &object : iter(objects))
     {
         if (point_in_dimensions(x, y, object_dimensions(object)))
         {
-            if (object.type != Object::Type::player)
+            if (object.type == Object::Type::bridge)
             {
                 return &object;
             }
-            player = &object;
+            if (object.type == Object::Type::water)
+            {
+                water = &object;
+                continue;
+            }
+            if (object.type == Object::Type::player)
+            {
+                player = &object;
+                continue;
+            }
+            return &object;
         }
     }
 
+    if (water)
+    {
+        return water;
+    }
     return player;
 }
 
@@ -202,6 +218,26 @@ static bool can_place_region(Place &place, Object::Type type, RectI region)
             }
         }
         return true;
+    case Object::Type::bridge:
+        if (region_overlaps_player(region, place.objects))
+        {
+            return false;
+        }
+        for (int ty = region.pos.y; ty < region.pos.y + region.siz.y; ty++)
+        {
+            for (int tx = region.pos.x; tx < region.pos.x + region.siz.x; tx++)
+            {
+                if (place.space.is_region_claimed({tx, ty, 1, 1}))
+                {
+                    if (object_space(tx, ty, Object::Type::water, place.objects) == nullptr ||
+                        object_space(tx, ty, Object::Type::bridge, place.objects) != nullptr)
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     case Object::Type::road:
         return !place.space.is_region_claimed(region);
     default:
@@ -239,11 +275,29 @@ Object *Place::place_object(Object object)
 
 static void remove_object_ptr(Place &place, Object *obj)
 {
-    if (obj->type != Object::Type::player)
-    {
-        place.space.unclaim_region_rect(object_dimensions(*obj));
-    }
+    RectI dims = object_dimensions(*obj);
+    Object::Type type = obj->type;
     place.objects.free(obj);
+
+    if (type != Object::Type::player)
+    {
+        for (int ty = dims.pos.y; ty < dims.pos.y + dims.siz.y; ty++)
+        {
+            for (int tx = dims.pos.x; tx < dims.pos.x + dims.siz.x; tx++)
+            {
+                bool still_claimed = false;
+                if (object_space(tx, ty, Object::Type::water, place.objects) != nullptr ||
+                    object_space(tx, ty, Object::Type::bridge, place.objects) != nullptr)
+                {
+                    still_claimed = true;
+                }
+                if (!still_claimed)
+                {
+                    place.space.unclaim_region_rect({tx, ty, 1, 1});
+                }
+            }
+        }
+    }
 }
 
 void Place::remove_object(int x, int y)
@@ -345,16 +399,41 @@ World World::clone()
         }
     }
 
+    auto has_place_mapping = [&](Place *p) {
+        for (int i = 0; i < fixer.mappings.count; i++)
+        {
+            if (fixer.mappings[i].first == p)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
     // Fix Place pointers inside script nodes (enter event targets, teleport targets)
     for (auto &node : iter(world.script->nodes))
     {
         if (node.place)
         {
-            fixer.add_pointer(&node.place);
+            if (has_place_mapping(node.place))
+            {
+                fixer.add_pointer(&node.place);
+            }
+            else
+            {
+                node.place = nullptr;
+            }
         }
         if (node.type == ScriptNode::Type::teleport && node.teleport.target)
         {
-            fixer.add_pointer(&node.teleport.target);
+            if (has_place_mapping(node.teleport.target))
+            {
+                fixer.add_pointer(&node.teleport.target);
+            }
+            else
+            {
+                node.teleport.target = nullptr;
+            }
         }
     }
 

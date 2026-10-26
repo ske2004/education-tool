@@ -1,7 +1,10 @@
+#include "catedu/genobj/building.hpp"
 #include "catedu/gui/editor/edit_basic.hpp"
 #include "catedu/gui/editor/edit_building.hpp"
 #include "catedu/gui/editor/edit_delete.hpp"
 #include "catedu/gui/editor/edit_line.hpp"
+#include "catedu/gui/editor/playtest.hpp"
+#include "catedu/scene/navigation.hpp"
 #include "tau/tau.h"
 
 // Helper: create a test dispatcher (no file I/O or rendering needed)
@@ -697,3 +700,304 @@ TEST(EditLine, WorksWithRoadType)
 
     disp.destroy();
 }
+
+// ============================================================================
+// Dispatcher Undo / Redo & Building Lifecycle tests
+// ============================================================================
+
+TEST(DispatcherUndoRedo, UndoAndRedoFirstAction)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    disp.place_object({Object::Type::tree, 0, 4, 4});
+    CHECK_TRUE(disp.world.current->get_object_at(4, 4) != nullptr);
+
+    disp.undo();
+    CHECK_TRUE(disp.world.current->get_object_at(4, 4) == nullptr);
+
+    disp.redo();
+    CHECK_TRUE(disp.world.current->get_object_at(4, 4) != nullptr);
+
+    disp.destroy();
+}
+
+TEST(DispatcherUndoRedo, CrossPlaceUndoRedoIsolation)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    disp.place_object({Object::Type::building, 2, 0, 0});
+    Object *bldg = disp.world.current->get_object_at(0, 0);
+    REQUIRE_TRUE(bldg != nullptr);
+
+    disp.enter_place(bldg);
+    Place *interior = disp.world.current;
+    REQUIRE_TRUE(interior != disp.world.first);
+
+    disp.place_object({Object::Type::item, 0, 1, -8});
+    CHECK_TRUE(interior->get_object_at(1, -8, Object::Type::item) != nullptr);
+
+    // Undo inside interior
+    disp.undo();
+    CHECK_TRUE(interior->get_object_at(1, -8, Object::Type::item) == nullptr);
+
+    // Switch to outdoor place and attempt redo: should NOT redo interior action outdoors
+    disp.world.current = disp.world.first;
+    disp.redo();
+    CHECK_TRUE(disp.world.first->get_object_at(1, -8, Object::Type::item) == nullptr);
+
+    // Switch back inside and redo: should restore interior item
+    disp.world.current = interior;
+    disp.redo();
+    CHECK_TRUE(interior->get_object_at(1, -8, Object::Type::item) != nullptr);
+
+    disp.destroy();
+}
+
+TEST(DispatcherUndoRedo, BuildingRemovalUndoRedoAndCloneSafety)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    disp.place_object({Object::Type::building, 2, 0, 0});
+    Object *bldg = disp.world.current->get_object_at(0, 0);
+    REQUIRE_TRUE(bldg != nullptr);
+
+    disp.enter_place(bldg);
+    Place *interior = disp.world.current;
+    interior->place_object({Object::Type::item, 0, 1, -8});
+    ScriptNode *enter_ev = disp.world.script->acquire_place_event(interior);
+    REQUIRE_TRUE(enter_ev != nullptr);
+
+    // Return outdoors and delete the building
+    disp.world.current = disp.world.first;
+    disp.remove_object(bldg);
+    CHECK_TRUE(disp.world.current->get_object_at(0, 0) == nullptr);
+
+    // Cloning the world while a building with a script event is deleted must not assert
+    World cloned = disp.world.clone();
+    cloned.destroy();
+
+    // Undo deletion: building, its interior item, and script event place pointer are restored
+    disp.undo();
+    Object *restored = disp.world.current->get_object_at(0, 0);
+    REQUIRE_TRUE(restored != nullptr);
+    REQUIRE_TRUE(restored->place != nullptr);
+    CHECK_TRUE(restored->place->get_object_at(1, -8, Object::Type::item) != nullptr);
+    CHECK_EQ(enter_ev->place, restored->place);
+
+    // Redo deletion and undo again
+    disp.redo();
+    CHECK_TRUE(disp.world.current->get_object_at(0, 0) == nullptr);
+    disp.undo();
+    restored = disp.world.current->get_object_at(0, 0);
+    REQUIRE_TRUE(restored != nullptr);
+    REQUIRE_TRUE(restored->place != nullptr);
+    CHECK_TRUE(restored->place->get_object_at(1, -8, Object::Type::item) != nullptr);
+
+    disp.destroy();
+}
+
+// ============================================================================
+// Raycast & Navigation Edge Cases
+// ============================================================================
+
+TEST(EditorRaycast, SkywardCameraDoesNotPlaceOrCrash)
+{
+    Dispatcher disp = make_test_dispatcher();
+    // Camera above ground looking straight up (away from y=0 plane)
+    Camera cam = Camera::init(60);
+    cam.set_aspect(1.0f);
+    cam.move(0, 10, 0);
+
+    Input click = make_test_input_click();
+
+    EditBasic basic = {};
+    basic.valid = true;
+    basic.update(disp, click, cam, TEST_VIEWPORT, Object::Type::tree);
+    CHECK_FALSE(basic.valid);
+
+    EditBuilding bldg = {};
+    bldg.valid = true;
+    bldg.update(disp, click, cam, TEST_VIEWPORT);
+    CHECK_FALSE(bldg.valid);
+    CHECK_FALSE(bldg.placing);
+
+    EditDelete del = {};
+    del.has_target = true;
+    del.update(disp, click, cam, TEST_VIEWPORT);
+    CHECK_FALSE(del.has_target);
+
+    EditLine line = {};
+    line.update(disp, click, cam, TEST_VIEWPORT, Object::Type::road);
+    CHECK_FALSE(line.started);
+
+    disp.destroy();
+}
+
+TEST(Navigation, CastleBlocksWalkabilityAndHighBuildingSafe)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    disp.place_object({Object::Type::castle, 4, 0, 0});
+    CHECK_FALSE(is_walkable(disp.world.current, {0, 0}));
+    CHECK_TRUE(is_walkable(disp.world.current, {10, 10}));
+
+    GeneratedObject tall = genmesh_generate_building(30);
+    CHECK_TRUE(tall.num_components <= COMPONENT_COUNT);
+
+    disp.destroy();
+}
+
+TEST(DispatcherUndoRedo, EditLineDragCompoundUndoRedo)
+{
+    Dispatcher disp = make_test_dispatcher();
+    Camera cam = make_test_camera();
+    EditLine edit = {};
+
+    // Start drag
+    Input click = make_test_input_click();
+    edit.update(disp, click, cam, TEST_VIEWPORT, Object::Type::wall);
+
+    // Set drag range from (0, 0) to (3, 0)
+    edit.pointer_start = {0, 0};
+    edit.pointer_end = {3, 0};
+    edit.started = true;
+
+    // Release to commit the line placement
+    Input release = make_test_input_released();
+    edit.update(disp, release, cam, TEST_VIEWPORT, Object::Type::wall);
+
+    // Verify all 4 wall tiles are placed
+    for (int x = 0; x <= 3; x++)
+    {
+        Object *obj = disp.world.current->get_object_at(x, 0);
+        REQUIRE_TRUE(obj != nullptr);
+        CHECK_EQ((int)obj->type, (int)Object::Type::wall);
+    }
+
+    // 1 undo removes the entire line
+    disp.undo();
+    for (int x = 0; x <= 3; x++)
+    {
+        CHECK_TRUE(disp.world.current->get_object_at(x, 0) == nullptr);
+    }
+
+    // 1 redo restores the entire line
+    disp.redo();
+    for (int x = 0; x <= 3; x++)
+    {
+        Object *obj = disp.world.current->get_object_at(x, 0);
+        REQUIRE_TRUE(obj != nullptr);
+        CHECK_EQ((int)obj->type, (int)Object::Type::wall);
+    }
+
+    disp.destroy();
+}
+
+TEST(DispatcherUndoRedo, PlayerReplacementCompoundUndoRedo)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    disp.place_object({Object::Type::player, 0, 0, 0});
+    CHECK_TRUE(disp.world.current->get_object_at(0, 0, Object::Type::player) != nullptr);
+
+    // Place a new player at (10, 10). Replaces the old player in a compound group.
+    disp.place_object({Object::Type::player, 0, 10, 10});
+    CHECK_TRUE(disp.world.current->get_object_at(0, 0, Object::Type::player) == nullptr);
+    CHECK_TRUE(disp.world.current->get_object_at(10, 10, Object::Type::player) != nullptr);
+
+    // 1 undo removes the new player AND restores the old player
+    disp.undo();
+    CHECK_TRUE(disp.world.current->get_object_at(0, 0, Object::Type::player) != nullptr);
+    CHECK_TRUE(disp.world.current->get_object_at(10, 10, Object::Type::player) == nullptr);
+
+    // 1 redo removes the old player AND restores the new player
+    disp.redo();
+    CHECK_TRUE(disp.world.current->get_object_at(0, 0, Object::Type::player) == nullptr);
+    CHECK_TRUE(disp.world.current->get_object_at(10, 10, Object::Type::player) != nullptr);
+
+    disp.destroy();
+}
+
+TEST(BridgePlacement, BridgeCanBePlacedOverWaterAndWalkable)
+{
+    Dispatcher disp = make_test_dispatcher();
+
+    // Place water at (5, 5)
+    disp.place_object({Object::Type::water, 0, 5, 5});
+    Object *water = disp.world.current->get_object_at(5, 5, Object::Type::water);
+    REQUIRE_TRUE(water != nullptr);
+    // Unbridged water is not walkable
+    CHECK_FALSE(is_walkable(disp.world.current, {5, 5}));
+
+    // Can place bridge over water
+    CHECK_TRUE(disp.world.current->can_place_objtype(Object::Type::bridge, 5, 5));
+    disp.place_object({Object::Type::bridge, 0, 5, 5});
+    Object *bridge = disp.world.current->get_object_at(5, 5, Object::Type::bridge);
+    REQUIRE_TRUE(bridge != nullptr);
+
+    // get_object_at prefers bridge over water
+    Object *top = disp.world.current->get_object_at(5, 5);
+    REQUIRE_TRUE(top != nullptr);
+    CHECK_EQ((int)top->type, (int)Object::Type::bridge);
+
+    // Bridged water is walkable
+    CHECK_TRUE(is_walkable(disp.world.current, {5, 5}));
+
+    // Cannot place a second bridge on the same tile
+    CHECK_FALSE(disp.world.current->can_place_objtype(Object::Type::bridge, 5, 5));
+
+    // Remove the bridge: water remains underneath and keeps tile claimed
+    disp.remove_object(5, 5);
+    CHECK_TRUE(disp.world.current->get_object_at(5, 5, Object::Type::bridge) == nullptr);
+    CHECK_TRUE(disp.world.current->get_object_at(5, 5, Object::Type::water) != nullptr);
+    CHECK_TRUE(disp.world.current->space.is_region_claimed({5, 5, 1, 1}));
+    CHECK_FALSE(is_walkable(disp.world.current, {5, 5}));
+
+    // Cannot place wall on water
+    CHECK_FALSE(disp.world.current->can_place_objtype(Object::Type::wall, 5, 5));
+
+    disp.destroy();
+}
+
+TEST(Playtest, NoHardcodedItemsAndWaterColliderSkippedWhenBridged)
+{
+    World world = World::create();
+    world.first->place_object({Object::Type::player, 0, 0, 0});
+    world.first->place_object({Object::Type::water, 0, 2, 2});
+    world.first->place_object({Object::Type::bridge, 0, 2, 2});
+    world.first->place_object({Object::Type::water, 0, 6, 6});
+
+    Playtest playtest = Playtest::create(world);
+
+    // Ensure no hardcoded items were generated
+    int item_count = 0;
+    for (auto &obj : iter(playtest.world.first->objects))
+    {
+        if (obj.type == Object::Type::item)
+        {
+            item_count++;
+        }
+    }
+    CHECK_EQ(item_count, 0);
+
+    // Bridged water at (2, 2) has no solid physics collider, open water at (6, 6) does
+    bool found_bridged_water = false;
+    bool found_open_water = false;
+    for (auto [id, body] : iter(playtest.physics.bodies))
+    {
+        if (body.solid && body.area.pos.x == 2 && body.area.pos.y == 2)
+        {
+            found_bridged_water = true;
+        }
+        if (body.solid && body.area.pos.x == 6 && body.area.pos.y == 6)
+        {
+            found_open_water = true;
+        }
+    }
+    CHECK_FALSE(found_bridged_water);
+    CHECK_TRUE(found_open_water);
+
+    playtest.destroy();
+}
+
+

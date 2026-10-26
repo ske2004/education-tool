@@ -258,6 +258,11 @@ ScriptCardAction show_script_card(ScriptCardDragNDrop &dnd, ScriptNode *node,
                 }
             });
         break;
+    case ScriptNode::Type::give_item:
+        show_generic_script_card(
+            dnd, node, user, {"Give item...", 0xCC660099 | colormask},
+            [&] { input(user, "Item", node->say, 256); });
+        break;
     default:;
     }
 

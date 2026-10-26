@@ -5,6 +5,7 @@
 #include "catedu/scene/physics.hpp"
 #include "catedu/sys/input.hpp"
 #include "catedu/ui/widgets.hpp"
+#include "catedu/ui/rendering/make_brush.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
@@ -56,7 +57,7 @@ PhysicsWorld create_bodies(Place *parent, Place &place, TableId &player, Table<P
         break;
         case Object::Type::tree: {
             PhysicsBody body = {};
-            body.area = {obj.x, obj.y, 1, 1};
+            body.area = {obj.x - 1, obj.y - 1, 2, 2};
             body.solid = true;
             body.dynamic = false;
 
@@ -64,17 +65,25 @@ PhysicsWorld create_bodies(Place *parent, Place &place, TableId &player, Table<P
         }
         break;
         case Object::Type::water: {
-            PhysicsBody body = {};
-            body.area = {obj.x, obj.y, 2, 2}; // Water is 2x2
-            body.solid = true;
-            body.dynamic = false;
+            int tx = (int)floorf(obj.x);
+            int ty = (int)floorf(obj.y);
+            bool covered = place.get_object_at(tx, ty, Object::Type::bridge) != nullptr ||
+                           place.get_object_at(tx, ty, Object::Type::road) != nullptr;
+            if (!covered)
+            {
+                PhysicsBody body = {};
+                body.area = {obj.x, obj.y, 1, 1};
+                body.solid = true;
+                body.dynamic = false;
 
-            physics.bodies.allocate(body);
+                physics.bodies.allocate(body);
+            }
         }
         break;
+        case Object::Type::castle:
         case Object::Type::building: {
             PhysicsBody body = {};
-            body.area = {obj.x - 4 + 0.5f, obj.y - 4 + 0.5f, 8, 8};
+            body.area = {obj.x - 4, obj.y - 4, 8, 8};
             body.solid = true;
             body.dynamic = false;
 
@@ -134,7 +143,7 @@ Playtest Playtest::create(World world)
     TableId player = {};
     Table<PlaytestNpc> npcs = {};
     for (auto &obj : iter(world.first->objects)) {
-        if (obj.type == Object::Type::building && obj.place == nullptr) {
+        if ((obj.type == Object::Type::building || obj.type == Object::Type::castle) && obj.place == nullptr) {
             obj.place = world.places.alloc();
             *obj.place = Place::create();
             obj.place->interior = true;
@@ -162,23 +171,8 @@ Playtest Playtest::create(World world)
     }
 
     PhysicsWorld physics = create_bodies(nullptr, *world.first, player, npcs);
-    
-    if (player != NULL_ID) {
-        PhysicsBody &pbody = physics.bodies.get_assert(player);
-        Object item1 = {};
-        item1.type = Object::Type::item;
-        item1.x = pbody.area.pos.x + 2;
-        item1.y = pbody.area.pos.y;
-        world.first->objects.alloc(item1);
 
-        Object item2 = {};
-        item2.type = Object::Type::item;
-        item2.x = pbody.area.pos.x - 2;
-        item2.y = pbody.area.pos.y;
-        world.first->objects.alloc(item2);
-    }
-
-    return {player, 0.0f, npcs, physics, world, nullptr, world.script->root, nullptr};
+    return {player, 0.0f, npcs, physics, world, nullptr, world.script->root, nullptr, {}};
 }
 
 void Playtest::destroy()
@@ -194,6 +188,44 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
     // Advance time (1 in-game hour every 5 seconds)
     this->world.time_of_day += (1.0f / (5.0f * 60.0f));
     if (this->world.time_of_day >= 24.0f) this->world.time_of_day -= 24.0f;
+
+    // HUD overlay (time clock and inventory)
+    {
+        AutoLayoutElement hud = {};
+        hud.position = AutoLayoutPosition::absolute;
+        hud.offset = {16, 16};
+        hud.layout.type = AutoLayout::column;
+        hud.padding = {8, 12, 8, 12};
+        hud.border = {1, 1, 1, 1};
+        hud.width.type = AutoLayoutDimension::autom;
+        hud.height.type = AutoLayoutDimension::autom;
+
+        UiBrush bg = UiMakeBrush::make_plain_brush()
+                         .squircle(0.75f)
+                         .with_solid(0x000000AA)
+                         .build();
+        UiBrush border = UiMakeBrush::make_plain_brush()
+                             .squircle(0.75f)
+                             .with_solid(0xFFFFFF33)
+                             .build();
+
+        user.begin_generic(hud, bg, border);
+
+        char time_str[64];
+        int hours = ((int)floorf(this->world.time_of_day) % 24 + 24) % 24;
+        int minutes = ((int)floorf((this->world.time_of_day - floorf(this->world.time_of_day)) * 60.0f) % 60 + 60) % 60;
+        snprintf(time_str, sizeof(time_str), "Time: %02d:%02d", hours, minutes);
+        label(user, time_str, {1.2f, 1.2f}, UiMakeBrush::make_solid(0xFFFFFFFF));
+
+        for (const auto &item : this->world.player_inventory.items)
+        {
+            char item_str[128];
+            snprintf(item_str, sizeof(item_str), "%s x%d", item.name.c_str(), item.amount);
+            label(user, item_str, {1.0f, 1.0f}, UiMakeBrush::make_solid(0xCCCCCCFF));
+        }
+
+        user.end_generic();
+    }
 
     if (this->current)
     {
@@ -234,14 +266,23 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
                 this->current = this->current->next;
             }
             break;
+        case ScriptNode::Type::give_item:
+            if (this->current->say[0] != '\0')
+            {
+                this->world.player_inventory.add_item(this->current->say,
+                                                      "Quest reward.", 1);
+            }
+            this->current = this->current->next;
+            break;
         default:
             assert(false);
         }
 
-        if (!this->current && parent && parent->parent &&
-            parent->parent->type == ScriptNode::Type::yesno)
+        while (!this->current && parent && parent->parent &&
+               parent->parent->type == ScriptNode::Type::yesno)
         {
             this->current = parent->parent->next;
+            parent = parent->parent->parent;
         }
 
         return;
@@ -445,17 +486,16 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
                     world.player_inventory.add_item("Coin", "Earned from work.", 5);
                 }
             } else if (closest_interactable->type == Object::Type::npc) {
-                ScriptNode *interaction = world.script->nodes.alloc();
-                *interaction = {};
-                interaction->type = ScriptNode::Type::say;
+                this->interaction_node = {};
+                this->interaction_node.type = ScriptNode::Type::say;
                 
                 // Random NPC dialogues
                 int r = rand() % 3;
-                if (r == 0) strcpy(interaction->say, "Villager: Hello! Nice weather we're having.");
-                else if (r == 1) strcpy(interaction->say, "Villager: I love this town. It's so peaceful.");
-                else strcpy(interaction->say, "Villager: Have you seen the mayor? He looks busy.");
+                if (r == 0) strcpy(this->interaction_node.say, "Villager: Hello! Nice weather we're having.");
+                else if (r == 1) strcpy(this->interaction_node.say, "Villager: I love this town. It's so peaceful.");
+                else strcpy(this->interaction_node.say, "Villager: Have you seen the mayor? He looks busy.");
                 
-                this->current = interaction;
+                this->current = &this->interaction_node;
             }
         }
     }

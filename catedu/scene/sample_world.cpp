@@ -172,6 +172,9 @@ Dispatcher generate_sample_world()
     yes_event->event = ScriptNode::EventType::yes;
     wh_yesno->yesno.yes = yes_event;
 
+    ScriptNode *give = script->append_node(ScriptNode::Type::give_item, yes_event);
+    strcpy(give->say, "Crystal");
+
     ScriptNode *tp = script->append_node(ScriptNode::Type::teleport, yes_event);
     tp->teleport.target = town_hall_interior;
 

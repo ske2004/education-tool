@@ -27,8 +27,10 @@ bool is_walkable(Place *place, Vector2i pos) {
     Object *obj = place->get_object_at(pos.x, pos.y);
     if (!obj) return true;
     if (obj->type == Object::Type::building || 
+        obj->type == Object::Type::castle ||
         obj->type == Object::Type::wall || 
-        obj->type == Object::Type::tree) {
+        obj->type == Object::Type::tree ||
+        obj->type == Object::Type::water) {
         return false;
     }
     return true; 
@@ -44,9 +46,16 @@ std::vector<Vector2i> find_path(Place *place, Vector2i start, Vector2i end,
     g_score[start] = 0.0f;
     
     int iterations = 0;
-    while (!open_set.empty() && iterations++ < max_iterations) {
-        Vector2i current = open_set.top().pos;
+    while (!open_set.empty() && iterations < max_iterations) {
+        AStarNode top = open_set.top();
         open_set.pop();
+        Vector2i current = top.pos;
+
+        auto it = g_score.find(current);
+        if (it != g_score.end() && top.g_cost > it->second) {
+            continue;
+        }
+        iterations++;
         
         if (current == end) {
             std::vector<Vector2i> path;
