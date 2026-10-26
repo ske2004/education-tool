@@ -64,11 +64,15 @@ struct GltfScene
 {
     std::string name;
     std::vector<int> nodes;
+    std::string extras;
 };
 
 struct GltfExport
 {
     const GenResources *resources;
+    GltfExportOptions options;
+    int interior_count;
+    Vector3 sun_color;
 
     std::vector<uint8_t> bin;
     // The JSON of each buffer view and accessor, they're written as they are.
@@ -450,6 +454,58 @@ static void add_draw(void *user, const GenDraw &draw)
     e.nodes[sink->parent].children.push_back(node);
 }
 
+static int export_interior_node(GltfExport &e, Place &place, const char *name,
+                                int interior_index)
+{
+    Matrix4 offset =
+        Matrix4::translate({interior_index * 64.0f, -32.0f, 0.0f});
+    int root = add_node(e, name, offset);
+
+    int ground = add_node(e, "ground", Matrix4::identity());
+    e.nodes[root].children.push_back(ground);
+    NodeSink ground_sink = {&e, ground};
+    emit_place_ground({add_draw, &ground_sink}, *e.resources, place);
+
+    for (auto &object : iter(place.objects))
+    {
+        const char *type_name = object_type_name(object.type);
+        bool named_prop = object.type == Object::Type::prop && object.id[0];
+
+        int node = add_node(e, named_prop ? object.id : type_name,
+                            place_object_matrix(object));
+        e.nodes[root].children.push_back(node);
+
+        NodeSink sink = {&e, node};
+        emit_place_object({add_draw, &sink}, *e.resources, object,
+                          Matrix4::identity());
+
+        std::string extras = "{\"type\":";
+        append_json_string(extras, type_name);
+        appendf(extras, ",\"x\":%.9g,\"y\":%.9g,\"floors\":%d", object.x,
+                object.y, object.floors);
+        if (object.type == Object::Type::prop)
+        {
+            extras += ",\"id\":";
+            append_json_string(extras, object.id);
+        }
+        if (object.place)
+        {
+            char nested_interior_name[128];
+            snprintf(nested_interior_name, sizeof nested_interior_name,
+                     "%s interior (%g, %g)", type_name, object.x, object.y);
+            e.interior_count++;
+            int nested_root = export_interior_node(
+                e, *object.place, nested_interior_name, e.interior_count);
+            e.scenes[0].nodes.push_back(nested_root);
+            appendf(extras, ",\"interior_node\":%d", nested_root);
+        }
+        extras += '}';
+        e.nodes[node].extras = extras;
+    }
+
+    return root;
+}
+
 static int export_place(GltfExport &e, Place &place, const char *name)
 {
     int scene = (int)e.scenes.size();
@@ -487,8 +543,17 @@ static int export_place(GltfExport &e, Place &place, const char *name)
             char interior_name[128];
             snprintf(interior_name, sizeof interior_name,
                      "%s interior (%g, %g)", type_name, object.x, object.y);
-            appendf(extras, ",\"interior_scene\":%d",
-                    export_place(e, *object.place, interior_name));
+            int interior_scene = export_place(e, *object.place, interior_name);
+            appendf(extras, ",\"interior_scene\":%d", interior_scene);
+
+            if (e.options.single_scene_interiors)
+            {
+                e.interior_count++;
+                int interior_root = export_interior_node(
+                    e, *object.place, interior_name, e.interior_count);
+                e.scenes[0].nodes.push_back(interior_root);
+                appendf(extras, ",\"interior_node\":%d", interior_root);
+            }
         }
         extras += '}';
         e.nodes[node].extras = extras;
@@ -497,17 +562,77 @@ static int export_place(GltfExport &e, Place &place, const char *name)
     return scene;
 }
 
+static const char *script_node_type_name(ScriptNode::Type type)
+{
+    switch (type)
+    {
+    case ScriptNode::Type::event:
+        return "event";
+    case ScriptNode::Type::say:
+        return "say";
+    case ScriptNode::Type::yesno:
+        return "yesno";
+    case ScriptNode::Type::teleport:
+        return "teleport";
+    case ScriptNode::Type::give_item:
+        return "give_item";
+    default:
+        return "unknown";
+    }
+}
+
+static const char *script_event_type_name(ScriptNode::EventType event)
+{
+    switch (event)
+    {
+    case ScriptNode::EventType::start:
+        return "start";
+    case ScriptNode::EventType::enter:
+        return "enter";
+    case ScriptNode::EventType::yes:
+        return "yes";
+    case ScriptNode::EventType::no:
+        return "no";
+    default:
+        return "none";
+    }
+}
+
+static const char *script_node_text(const ScriptNode &node)
+{
+    if (node.type == ScriptNode::Type::say ||
+        node.type == ScriptNode::Type::give_item)
+    {
+        return node.say;
+    }
+    else if (node.type == ScriptNode::Type::yesno)
+    {
+        return node.yesno.question;
+    }
+    return "";
+}
+
 static std::string write_json(const GltfExport &e)
 {
     std::string json =
         "{\"asset\":{\"version\":\"2.0\",\"generator\":\"Educore\"},"
-        "\"scene\":0,\"scenes\":[";
+        "\"extensionsUsed\":[\"KHR_lights_punctual\"],"
+        "\"extensions\":{\"KHR_lights_punctual\":{\"lights\":[";
+    appendf(json,
+            "{\"name\":\"sun\",\"type\":\"directional\",\"color\":[%.9g,%.9g,%.9g],"
+            "\"intensity\":1.0}",
+            e.sun_color.x, e.sun_color.y, e.sun_color.z);
+    json += "]}},\"scene\":0,\"scenes\":[";
     for (size_t i = 0; i < e.scenes.size(); i++)
     {
         json += i ? ",{\"name\":" : "{\"name\":";
         append_json_string(json, e.scenes[i].name.c_str());
         json += ",\"nodes\":";
         append_int_array(json, e.scenes[i].nodes);
+        if (!e.scenes[i].extras.empty())
+        {
+            json += ",\"extras\":" + e.scenes[i].extras;
+        }
         json += '}';
     }
 
@@ -646,11 +771,90 @@ static void write_u32(FILE *f, uint32_t value)
 }
 
 bool export_world_gltf(const char *path, World &world,
-                       const GenResources &resources)
+                       const GenResources &resources,
+                       GltfExportOptions options)
 {
     GltfExport e = {};
     e.resources = &resources;
+    e.options = options;
     export_place(e, *world.first, "World");
+
+    float t = world.time_of_day / 24.0f;
+    float angle = t * 3.14159265f * 2.0f;
+
+    float sun_x = cosf(angle);
+    float sun_y = -sinf(angle);
+    float sun_z = 0.5f;
+
+    // Mirrored Z for glTF's right-handed coordinate system
+    float dir_x = -sun_x;
+    float dir_y = -sun_y;
+    float dir_z = -sun_z;
+
+    float day_intensity = sinf(angle - 3.14159265f / 2.0f) * 0.5f + 0.5f;
+
+    Vector3 day_light = {0.9f, 0.9f, 0.8f};
+    Vector3 night_light = {0.1f, 0.2f, 0.4f};
+    Vector3 sunset_light = {1.0f, 0.5f, 0.2f};
+
+    Vector3 light_color;
+    if (day_intensity > 0.5f)
+    {
+        float f = (day_intensity - 0.5f) * 2.0f;
+        light_color = {
+            sunset_light.x + (day_light.x - sunset_light.x) * f,
+            sunset_light.y + (day_light.y - sunset_light.y) * f,
+            sunset_light.z + (day_light.z - sunset_light.z) * f};
+    }
+    else
+    {
+        float f = day_intensity * 2.0f;
+        light_color = {
+            night_light.x + (sunset_light.x - night_light.x) * f,
+            night_light.y + (sunset_light.y - night_light.y) * f,
+            night_light.z + (sunset_light.z - night_light.z) * f};
+    }
+
+    e.sun_color = light_color;
+
+    std::string script_json = "[";
+    if (world.script)
+    {
+        bool first_node = true;
+        for (auto &node : iter(world.script->nodes))
+        {
+            if (!first_node)
+            {
+                script_json += ',';
+            }
+            first_node = false;
+
+            script_json += "{\"type\":";
+            append_json_string(script_json, script_node_type_name(node.type));
+            script_json += ",\"event\":";
+            append_json_string(script_json, script_event_type_name(node.event));
+            script_json += ",\"text\":";
+            append_json_string(script_json, script_node_text(node));
+            script_json += '}';
+        }
+    }
+    script_json += ']';
+
+    std::string scene_extras = "{\"time_of_day\":";
+    appendf(scene_extras, "%.9g", world.time_of_day);
+    scene_extras += ",\"sun_light\":{\"direction\":[";
+    appendf(scene_extras, "%.9g,%.9g,%.9g", dir_x, dir_y, dir_z);
+    scene_extras += "],\"color\":[";
+    appendf(scene_extras, "%.9g,%.9g,%.9g", light_color.x, light_color.y,
+            light_color.z);
+    scene_extras += "]},\"script\":";
+    scene_extras += script_json;
+    scene_extras += '}';
+
+    if (!e.scenes.empty())
+    {
+        e.scenes[0].extras = scene_extras;
+    }
 
     std::string json = write_json(e);
     while (json.size() % 4)
@@ -693,4 +897,10 @@ bool export_world_gltf(const char *path, World &world,
     bool ok = !ferror(f);
     ok = fclose(f) == 0 && ok;
     return ok;
+}
+
+bool export_world_gltf(const char *path, World &world,
+                       const GenResources &resources)
+{
+    return export_world_gltf(path, world, resources, GltfExportOptions{});
 }

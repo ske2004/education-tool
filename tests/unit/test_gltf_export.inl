@@ -11,13 +11,15 @@ static const char *const GLTF_TEST_PATH = "bin/gltf_export_test.glb";
 
 // Exports the world and reads the file back. The exporter only needs the
 // names of the models, so no GPU is needed.
-static cgltf_data *export_and_parse(World &world)
+static cgltf_data *export_and_parse(World &world,
+                                    GltfExportOptions export_options = {})
 {
     ResourceSpec spec = load_resource_names();
     GenResources resources = {};
     resources.spec = &spec;
 
-    bool exported = export_world_gltf(GLTF_TEST_PATH, world, resources);
+    bool exported =
+        export_world_gltf(GLTF_TEST_PATH, world, resources, export_options);
     spec.models.deinit();
     if (!exported)
     {
@@ -210,6 +212,84 @@ TEST(GltfExport, TrianglesFaceOutwards)
     }
     CHECK_TRUE(triangles > 0);
     CHECK_EQ(facing, triangles);
+
+    cgltf_free(data);
+    world.destroy();
+}
+
+TEST(GltfExport, ExportsTimeOfDayAndScriptExtras)
+{
+    World world = World::create();
+    world.time_of_day = 14.5f;
+
+    ScriptNode *start_ev = world.script->acquire_start_event();
+    REQUIRE_TRUE(start_ev != nullptr);
+    ScriptNode *say =
+        world.script->append_node(ScriptNode::Type::say, start_ev);
+    strcpy(say->say, "Hello GlTF!");
+
+    cgltf_data *data = export_and_parse(world);
+    REQUIRE_TRUE(data);
+
+    REQUIRE_TRUE(data->scene != nullptr);
+    REQUIRE_TRUE(data->scene->extras.data != nullptr);
+
+    CHECK_TRUE(strstr(data->scene->extras.data, "\"time_of_day\":14.5"));
+    CHECK_TRUE(strstr(data->scene->extras.data, "\"sun_light\":"));
+    CHECK_TRUE(strstr(data->scene->extras.data, "\"direction\":"));
+    CHECK_TRUE(strstr(data->scene->extras.data, "\"color\":"));
+    CHECK_TRUE(strstr(data->scene->extras.data, "\"script\":"));
+    CHECK_TRUE(strstr(data->scene->extras.data, "\"Hello GlTF!\""));
+
+    // Verify punctual directional light is exported in glTF extensions
+    CHECK_TRUE(data->lights_count > 0);
+    if (data->lights_count > 0)
+    {
+        CHECK_EQ(data->lights[0].type, cgltf_light_type_directional);
+        CHECK_TRUE(data->lights[0].name &&
+                   strcmp(data->lights[0].name, "sun") == 0);
+    }
+
+    cgltf_free(data);
+    world.destroy();
+}
+
+TEST(GltfExport, SingleSceneInteriorsOption)
+{
+    World world = World::create();
+    Object *building =
+        world.first->place_object(make_object(Object::Type::building, 0, 0));
+    REQUIRE_TRUE(building);
+    building->place = world.places.alloc();
+    *building->place = Place::create();
+    building->place->interior = true;
+    REQUIRE_TRUE(
+        building->place->place_object(make_object(Object::Type::wall, 2, 2)));
+
+    GltfExportOptions options = {};
+    options.single_scene_interiors = true;
+    cgltf_data *data = export_and_parse(world, options);
+    REQUIRE_TRUE(data);
+
+    // Default scene includes interior root node
+    REQUIRE_TRUE(data->scene != nullptr);
+    CHECK_TRUE(data->scene->nodes_count >= 3);
+
+    // Root node for the interior exists and is positioned offset
+    cgltf_node *interior_node = find_node(data, "building interior (0, 0)");
+    REQUIRE_TRUE(interior_node != nullptr);
+    CHECK_TRUE(interior_node->has_matrix);
+    CHECK_EQ(interior_node->matrix[12], 64.0f);
+    CHECK_EQ(interior_node->matrix[13], -32.0f);
+
+    // Interior object exists in node hierarchy
+    cgltf_node *wall = find_node(data, "wall");
+    CHECK_TRUE(wall != nullptr);
+
+    // Building extras reference interior_node
+    cgltf_node *building_node = find_node(data, "building");
+    REQUIRE_TRUE(building_node && building_node->extras.data);
+    CHECK_TRUE(strstr(building_node->extras.data, "\"interior_node\""));
 
     cgltf_free(data);
     world.destroy();

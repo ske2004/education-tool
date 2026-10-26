@@ -9,30 +9,83 @@ Click the **Export** button in the editor toolbar (the tray with an up arrow),
 or press **Ctrl+E**. The world is written to `assets/world.glb` and a popup
 says whether the export succeeded.
 
+Programmatic export is available via `export_world_gltf` in
+`catedu/scene/gltf_export.hpp`.
+
 ## What's in the file
 
 - **Scenes.** The outdoor world is the default scene (scene 0). Every interior
   gets a scene of its own, named after its building, e.g.
   `building interior (8, -4)`.
+- **Directional Light (`KHR_lights_punctual`).** The root glTF declares the
+  `KHR_lights_punctual` extension containing a directional sun light matching
+  the world's `time_of_day` and sun angle.
+- **Scene Extras.** Scene 0 carries world metadata in its `extras` object:
+  - `time_of_day`: float value representing the hour of the day `[0..24)`.
+  - `sun_light`: contains `direction` `[x, y, z]` (mirrored for glTF coordinates)
+    and linear RGB `color` `[r, g, b]` matching the day/night/sunset palette.
+  - `script`: serialized array of script graph nodes, each specifying:
+    - `type`: node type (`event`, `say`, `yesno`, `teleport`, `give_item`)
+    - `event`: trigger event (`start`, `enter`, `yes`, `no`, or `none`)
+    - `text`: dialogue text or question prompt
+
+  Example scene `extras`:
+  ```json
+  {
+    "time_of_day": 14.5,
+    "sun_light": {
+      "direction": [0.2588, 0.9659, -0.5],
+      "color": [0.9, 0.9, 0.8]
+    },
+    "script": [
+      {"type": "event", "event": "start", "text": ""},
+      {"type": "say", "event": "none", "text": "Welcome to Greenville!"}
+    ]
+  }
+  ```
+
 - **Nodes.** Each scene has a `ground` node and one node per placed object,
   named after its type (`building`, `road`, `tree`, ...) or, for props, after
   the prop ID (`barrel`, `bench`, ...). The object node holds the object's
   position; its children are the boxes and models it's drawn with.
-- **Extras.** Object nodes carry the editor properties in `extras`, so the
+- **Object Extras.** Object nodes carry the editor properties in `extras`, so the
   game logic can be rebuilt in another engine:
 
   ```json
-  {"type": "building", "x": 8, "y": -4, "floors": 3, "interior_scene": 1}
+  {"type": "building", "x": 8, "y": -4, "floors": 3, "interior_scene": 1, "interior_node": 7}
   {"type": "prop", "x": 2, "y": 5, "floors": 0, "id": "barrel"}
   ```
 
   `x` and `y` are the editor's grid coordinates. `interior_scene` is the index
-  of the scene holding the building's interior. Blender shows extras as custom
-  properties, and Godot imports them as node metadata.
+  of the scene holding the building's interior. When `single_scene_interiors` is
+  enabled, `interior_node` is the node index of the interior root in scene 0.
+  Blender shows extras as custom properties, and Godot imports them as node
+  metadata.
 - **Meshes and materials.** Geometry is shared: every box is one cube mesh
   instanced with a transform, and each source model is stored once. Textures
   are embedded as PNGs. Object colors become `baseColorFactor`, converted from
   sRGB to linear as glTF requires.
+
+## Export Options
+
+The exporter accepts optional configuration via `GltfExportOptions`:
+
+```cpp
+struct GltfExportOptions
+{
+    bool single_scene_interiors = false;
+};
+
+bool export_world_gltf(const char *path, World &world,
+                       const GenResources &resources,
+                       GltfExportOptions options = {});
+```
+
+- **`single_scene_interiors`**: When set to `true`, each building interior is
+  placed as an offset root node directly in scene 0 (translated along X by
+  `interior_index * 64.0f` and Y by `-32.0f`). This allows single-scene
+  importers like Godot and Unity to load all interior models and geometry from
+  the default scene without needing multi-scene import support.
 
 ## Coordinate system
 
@@ -56,19 +109,10 @@ export without a graphics context.
 
 ## Limits
 
-- **Fixed output path.** The file always goes to `assets/world.glb` and
-  overwrites the previous export. There's no file dialog.
+- **Fixed output path.** The editor UI export always goes to `assets/world.glb` and
+  overwrites the previous export.
 - **Web build.** In the WASM build the file is written to the browser's
-  in-memory filesystem and can't be downloaded yet.
-- **Interiors in other tools.** Many importers (Godot, Unity, most web viewers)
-  load only the default scene, so interiors are left out there. Blender imports
-  every scene.
-- **Lighting and sky.** The editor's time-of-day lighting, fog and skybox
-  aren't exported, only the geometry and materials. Exported scenes look
-  flatter or brighter depending on the target's lighting.
-- **Behaviour isn't exported.** Scripts, dialogue, NPC logic and the inventory
-  stay in `world.dat`. Only the object properties in `extras` travel with the
-  file.
+  in-memory filesystem and can't be downloaded directly yet.
 - **Textures must be PNG.** Other image formats are skipped with a warning on
   stderr; the model is still exported, untextured.
 - **One primitive per model.** Like the renderer, the exporter only reads the
@@ -82,13 +126,7 @@ export without a graphics context.
    timestamped file name so exports don't overwrite each other.
 3. **Godot and Unity import helpers.** A small import script per engine that
    reads `extras` and swaps object nodes for engine prefabs (spawn points for
-   `player`, NPCs with their dialogue, doors that load `interior_scene`).
-4. **Interiors for single-scene importers.** An option to place interiors in
-   the default scene, offset away from the world or hidden, so Godot and Unity
-   users get them too.
-5. **Export the light.** Add a `KHR_lights_punctual` directional light matching
-   the world's time of day.
-6. **Merge static geometry.** An option to merge each object's boxes into one
+   `player`, NPCs with their dialogue, doors that load `interior_scene` /
+   `interior_node`).
+4. **Merge static geometry.** An option to merge each object's boxes into one
    mesh per material, for engines that handle many small nodes poorly.
-7. **Export scripts and dialogue.** Write the script graph to JSON next to the
-   `.glb`, or into the root's extras, so behaviour can be rebuilt too.
