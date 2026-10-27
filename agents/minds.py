@@ -2,6 +2,7 @@
 
 import json
 import random
+import threading
 from dataclasses import dataclass, field
 
 DEFAULT_MODEL = "claude-haiku-4-5"
@@ -159,6 +160,10 @@ class ClaudeMind:
         self.hearing = hearing
         self.input_tokens = 0
         self.output_tokens = 0
+        self.cache_read_tokens = 0
+        self.cache_write_tokens = 0
+        # decide() runs on several threads when the demo decides concurrently.
+        self._usage_lock = threading.Lock()
         self.memories = []
 
     def summarize_memory(self, memories=None):
@@ -176,13 +181,19 @@ class ClaudeMind:
         request = {
             "model": self.model,
             "max_tokens": 16000,
-            "system": SYSTEM_PROMPT.format(
-                name=persona.name,
-                role=persona.role,
-                traits=persona.traits,
-                goal=persona.goal,
-                hearing=self.hearing,
-            ),
+            "system": [
+                {
+                    "type": "text",
+                    "text": SYSTEM_PROMPT.format(
+                        name=persona.name,
+                        role=persona.role,
+                        traits=persona.traits,
+                        goal=persona.goal,
+                        hearing=self.hearing,
+                    ),
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             "messages": [{"role": "user", "content": situation.text}],
             "output_config": output_config,
         }
@@ -197,8 +208,11 @@ class ClaudeMind:
             )
         else:
             response = self.client.messages.create(**request)
-        self.input_tokens += response.usage.input_tokens
-        self.output_tokens += response.usage.output_tokens
+        with self._usage_lock:
+            self.input_tokens += response.usage.input_tokens
+            self.output_tokens += response.usage.output_tokens
+            self.cache_read_tokens += getattr(response.usage, "cache_read_input_tokens", 0) or 0
+            self.cache_write_tokens += getattr(response.usage, "cache_creation_input_tokens", 0) or 0
 
         if response.stop_reason in ("refusal", "max_tokens"):
             return Action(thought=f"(no decision: {response.stop_reason})")
@@ -208,7 +222,10 @@ class ClaudeMind:
         return Action(data["thought"], data["say"].strip(), data["go_to"])
 
     def usage(self):
-        return f"{self.input_tokens} input and {self.output_tokens} output tokens"
+        return (
+            f"{self.input_tokens} input and {self.output_tokens} output tokens"
+            f" ({self.cache_read_tokens} cache read, {self.cache_write_tokens} cache write)"
+        )
 
 
 class ScriptedMind:
