@@ -377,7 +377,7 @@ def main(argv=None):
     parser.add_argument("--effort", default=DEFAULT_EFFORT, choices=["low", "medium", "high", "xhigh", "max"], help="Claude effort (default: the model's own; Haiku doesn't take one)")
     parser.add_argument("--out", type=Path, default=HERE / "out", help="output directory (default agents/out)")
     parser.add_argument("--quiet", action="store_true", help="don't print what happens")
-    parser.add_argument("--parallel", action="store_true", help="run agent decisions concurrently in each turn")
+    parser.add_argument("--sequential", action="store_true", help="decide one resident at a time instead of concurrently")
     args = parser.parse_args(argv)
 
     personas = PERSONAS[: args.agents]
@@ -393,7 +393,11 @@ def main(argv=None):
 
     with Town() as town:
         plan = generate_town(town, [p.name for p in personas], seed=args.seed)
-        simulation = Simulation(town, plan, personas, mind, None if args.quiet else print_event, parallel=args.parallel)
+        # ScriptedMind is stateful and draws from a shared RNG, so its decisions
+        # must run in a fixed order to stay reproducible. It also relies on
+        # hearing same-turn speech, which concurrent decisions don't see.
+        concurrent = not args.sequential and not args.offline
+        simulation = Simulation(town, plan, personas, mind, None if args.quiet else print_event, parallel=concurrent)
         print(f"{len(personas)} residents, {len(plan.locations)} places, {args.turns} turns, decided by {mind_name}.")
         simulation.run(args.turns)
         page = write_outputs(town, simulation, args.out, mind_name)

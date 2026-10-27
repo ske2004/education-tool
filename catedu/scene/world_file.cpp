@@ -6,6 +6,10 @@
 #include <vector>
 
 // TODO: Get rid of this and use handles instead
+static const char WORLD_FILE_MAGIC[4] = {'E', 'D', 'U', 'W'};
+// Version 1 is the legacy headerless layout.
+static const uint32_t WORLD_FILE_VERSION = 2;
+
 struct PtrToHandle
 {
     void *ptr;
@@ -123,6 +127,10 @@ bool WorldFile::save(const char *path, Dispatcher &dispatcher)
         pushmapper(&mapper, &place, mapper.mappings.size());
     }
 
+    fwrite(WORLD_FILE_MAGIC, sizeof(WORLD_FILE_MAGIC), 1, file);
+    uint32_t version = WORLD_FILE_VERSION;
+    fwrite(&version, sizeof(version), 1, file);
+
     uint32_t place_count = mapper.mappings.size();
     fwrite(&place_count, sizeof(place_count), 1, file);
 
@@ -217,6 +225,28 @@ Dispatcher WorldFile::load(const char *path)
     if (!file)
     {
         return dispatcher;
+    }
+
+    char magic[4] = {};
+    if (fread(magic, sizeof(magic), 1, file) == 1 &&
+        memcmp(magic, WORLD_FILE_MAGIC, sizeof(magic)) == 0)
+    {
+        uint32_t version = 0;
+        if (fread(&version, sizeof(version), 1, file) != 1 || version < 2 ||
+            version > WORLD_FILE_VERSION)
+        {
+            fprintf(stderr,
+                    "WorldFile::load: '%s' has unsupported format version %u "
+                    "(this build supports up to %u)\n",
+                    path, version, WORLD_FILE_VERSION);
+            fclose(file);
+            return dispatcher;
+        }
+    }
+    else
+    {
+        // Legacy headerless v1 file.
+        rewind(file);
     }
 
     uint32_t count = 0;

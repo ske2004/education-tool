@@ -43,3 +43,6 @@ Thumbs.db
 # Emacs files
 # ( .# files are temporary files )
 .#*
+
+# Editor session state
+.redactor_history.db
