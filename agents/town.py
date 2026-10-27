@@ -13,7 +13,9 @@ pathfinding, movement and perception. Python decides what the agents do.
 
 import json
 import os
+import queue
 import subprocess
+import threading
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -38,7 +40,7 @@ def _plain(value):
 class Town:
     """A running `educore --agent-server` process holding one world."""
 
-    def __init__(self, binary=None, show_engine_log=False):
+    def __init__(self, binary=None, show_engine_log=False, timeout=30):
         binary = Path(binary or os.environ.get("EDUCORE_BIN") or DEFAULT_BINARY)
         if not binary.exists():
             raise FileNotFoundError(
@@ -56,6 +58,11 @@ class Town:
             encoding="utf-8",
             bufsize=1,
         )
+        self._timeout = timeout
+        # A background thread reads replies so that waiting for one can time out.
+        self._replies = queue.Queue()
+        self._reader = threading.Thread(target=self._read_replies, daemon=True)
+        self._reader.start()
 
     def __enter__(self):
         return self
@@ -67,20 +74,47 @@ class Town:
         if self._process.poll() is None:
             try:
                 self._call("quit")
-            except (TownError, OSError):
+            except (RuntimeError, OSError):
                 pass
+        try:
             self._process.stdin.close()
-            self._process.wait(timeout=10)
+        except OSError:
+            pass  # The engine already exited, so its pipe is broken.
+        self._process.wait(timeout=10)
+        self._reader.join(timeout=10)
         self._process.stdout.close()
+
+    def _read_replies(self):
+        for line in iter(self._process.stdout.readline, ""):
+            self._replies.put(line)
+        self._replies.put("")  # The engine closed its output.
+
+    def _exited(self, cmd):
+        try:
+            code = self._process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self._process.kill()
+            code = self._process.wait()
+        return RuntimeError(f"engine exited with code {code} during '{cmd}'")
 
     def _call(self, cmd, **fields):
         fields = {key: value for key, value in fields.items() if value is not None}
-        self._process.stdin.write(json.dumps({"cmd": cmd, **fields}) + "\n")
-        self._process.stdin.flush()
+        try:
+            self._process.stdin.write(json.dumps({"cmd": cmd, **fields}) + "\n")
+            self._process.stdin.flush()
+        except BrokenPipeError:
+            raise self._exited(cmd) from None
 
-        line = self._process.stdout.readline()
+        try:
+            line = self._replies.get(timeout=self._timeout)
+        except queue.Empty:
+            self._process.kill()
+            self._process.wait()
+            raise TimeoutError(
+                f"the agent server didn't reply to '{cmd}' within {self._timeout} seconds"
+            ) from None
         if not line:
-            raise TownError(f"the agent server exited during '{cmd}'")
+            raise self._exited(cmd)
         reply = json.loads(line)
         if not reply.get("ok"):
             raise TownError(reply.get("error", "unknown error"))

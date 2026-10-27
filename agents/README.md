@@ -134,8 +134,12 @@ quotes or backslashes.
   block walking (the same rules as the playtest's NPCs).
 - **Speech lives in Python.** The engine doesn't know who said what; hearing is
   a distance check in `demo.py`.
-- **Turns are sequential.** Residents decide one after another so later ones
-  hear earlier ones, which makes a turn as slow as all its requests together.
+- **Turns are concurrent by default.** Residents decide at the same time, so a
+  turn takes about as long as its slowest request. Nobody hears what another
+  resident says in the same turn; they hear it at the start of their next turn.
+  Actions still apply in resident order. `--sequential` decides one resident
+  at a time, so later residents hear earlier ones in the same turn. `--offline`
+  always decides sequentially.
 - **Short memory.** Each resident sees its last 12 events, with no
   summarising or reflection, so long runs forget the morning.
 

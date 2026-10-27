@@ -7,6 +7,7 @@ skipped without it. Nothing here calls the real Claude API.
 """
 
 import json
+import os
 import sys
 import tempfile
 import threading
@@ -201,8 +202,11 @@ class ClaudeMindTest(unittest.TestCase):
         self.assertNotIn("fallbacks", request)
         schema = request["output_config"]["format"]["schema"]
         self.assertEqual(schema["properties"]["go_to"]["enum"], ["", "Café", "Library", "Ben"])
-        self.assertIn("You are Ada", request["system"])
-        self.assertEqual(mind.usage(), "100 input and 20 output tokens")
+        self.assertIn("You are Ada", request["system"][0]["text"])
+        self.assertEqual(request["system"][0]["cache_control"], {"type": "ephemeral"})
+        self.assertEqual(
+            mind.usage(), "100 input and 20 output tokens (0 cache read, 0 cache write)"
+        )
 
     def test_opus_gets_effort_and_fallbacks(self):
         messages = FakeMessages()
@@ -411,6 +415,30 @@ class TownSayTest(unittest.TestCase):
         self.assertEqual(obs["speech"][0]["text"], "Hi!")
         self.assertEqual(obs["tick"], 1)
         self.assertEqual(obs["objects"], [])
+
+
+class TownProcessFailureTest(unittest.TestCase):
+    def test_exited_engine_is_a_clear_error(self):
+        # Python rejects the unknown `--agent-server` option and exits at once.
+        town = Town(binary=sys.executable)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "engine exited with code"):
+                town.objects()
+        finally:
+            town.close()
+
+    @unittest.skipIf(os.name == "nt", "needs a shebang script")
+    def test_silent_engine_times_out(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "silent"
+            script.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(60)\n", encoding="utf-8")
+            script.chmod(0o755)
+            town = Town(binary=script, timeout=0.5)
+            try:
+                with self.assertRaisesRegex(TimeoutError, "'objects'"):
+                    town.objects()
+            finally:
+                town.close()
 
 
 if __name__ == "__main__":
