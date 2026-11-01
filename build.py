@@ -176,7 +176,9 @@ def main():
   for line in lines:
     status = os.system(line)
     if status != 0:
-      exit(status)
+      # On POSIX os.system returns a wait status (e.g. 512), which would
+      # wrap to 0 when passed to exit(); always report failure as 1.
+      exit(1)
 
 if __name__ == "__main__":
   main()

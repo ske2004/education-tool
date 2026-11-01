@@ -17,11 +17,36 @@ struct Mapper
     std::vector<PtrToHandle> mappings;
 };
 
-struct SavingObject
+// File header. Files written before versioning start directly with the
+// place count, which is always far smaller than this magic value.
+static const uint32_t WORLD_FILE_MAGIC = 0x57554445; // "EDUW"
+static const uint32_t WORLD_FILE_VERSION = 2;
+
+// Version 0 (unversioned, before props) object record.
+struct SavingObjectV0
 {
     Object::Type type;
     int floors;
     float x, y;
+    uint32_t place;
+};
+
+// Version 1 (unversioned, 8ba44ed onwards): adds prop id.
+struct SavingObjectV1
+{
+    Object::Type type;
+    int floors;
+    float x, y;
+    uint32_t place;
+    char id[32];
+};
+
+// Version 2 (versioned header): adds z.
+struct SavingObject
+{
+    Object::Type type;
+    int floors;
+    float x, y, z;
     uint32_t place;
     char id[32];
 };
@@ -86,7 +111,10 @@ static void export_place(FILE *f, Place *place) {
 void WorldFile::export_json(const char *path, Dispatcher &dispatcher)
 {
     FILE *f = fopen(path, "w");
-    if (!f) return;
+    if (!f) {
+        fprintf(stderr, "WorldFile::export_json: failed to open '%s' for writing\n", path);
+        return;
+    }
     
     fprintf(f, "{\n  \"world\": ");
     export_place(f, dispatcher.world.first);
@@ -118,6 +146,9 @@ bool WorldFile::save(const char *path, Dispatcher &dispatcher)
         return false;
     }
 
+    fwrite(&WORLD_FILE_MAGIC, sizeof(WORLD_FILE_MAGIC), 1, file);
+    fwrite(&WORLD_FILE_VERSION, sizeof(WORLD_FILE_VERSION), 1, file);
+
     for (auto &place : iter(dispatcher.world.places))
     {
         pushmapper(&mapper, &place, mapper.mappings.size());
@@ -144,6 +175,7 @@ bool WorldFile::save(const char *path, Dispatcher &dispatcher)
             so.floors = obj.floors;
             so.x = obj.x;
             so.y = obj.y;
+            so.z = obj.z;
             so.place = gethandle(&mapper, obj.place);
             memcpy(so.id, obj.id, sizeof(so.id));
 
@@ -207,6 +239,100 @@ bool WorldFile::save(const char *path, Dispatcher &dispatcher)
     return true;
 }
 
+static bool read_u32_at(FILE *file, long offset, uint32_t *out)
+{
+    return fseek(file, offset, SEEK_SET) == 0 && fread(out, sizeof(*out), 1, file) == 1;
+}
+
+// Checks whether an unversioned file parses exactly to its end when objects
+// are `record_size` bytes. `start` points just past the place count.
+static bool legacy_layout_fits(FILE *file, long start, long file_size,
+                               uint32_t place_count, size_t record_size)
+{
+    long pos = start;
+    for (uint32_t i = 0; i < place_count; i++)
+    {
+        uint32_t obj_count = 0;
+        if (!read_u32_at(file, pos, &obj_count) || obj_count > 100000)
+            return false;
+        pos += sizeof(uint32_t) + sizeof(bool) + (long)(obj_count * record_size);
+        if (pos > file_size)
+            return false;
+    }
+
+    // Script section is optional in old files, and so are its tail parts.
+    if (pos == file_size)
+        return true;
+
+    uint32_t node_count = 0;
+    if (!read_u32_at(file, pos, &node_count) || node_count > 100000)
+        return false;
+    pos += sizeof(uint32_t) + (long)(node_count * sizeof(SavingScriptNode));
+    if (pos == file_size)
+        return true;
+
+    uint32_t global_events_count = 0;
+    if (!read_u32_at(file, pos, &global_events_count) || global_events_count > 100000)
+        return false;
+    pos += sizeof(uint32_t) + (long)(global_events_count * sizeof(uint32_t));
+    if (pos == file_size)
+        return true;
+
+    return pos + (long)sizeof(uint32_t) == file_size; // root handle
+}
+
+// Unversioned files come in two object layouts (with or without prop id).
+// Picks the one under which the file parses cleanly; leaves the file
+// position unchanged.
+static uint32_t detect_legacy_version(FILE *file, uint32_t place_count)
+{
+    long start = ftell(file);
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+
+    uint32_t version = 1;
+    if (legacy_layout_fits(file, start, file_size, place_count, sizeof(SavingObjectV1)))
+        version = 1;
+    else if (legacy_layout_fits(file, start, file_size, place_count, sizeof(SavingObjectV0)))
+        version = 0;
+
+    fseek(file, start, SEEK_SET);
+    return version;
+}
+
+static bool read_saving_object(FILE *file, uint32_t version, SavingObject *so)
+{
+    *so = {};
+    if (version >= 2)
+    {
+        return fread(so, sizeof(*so), 1, file) == 1;
+    }
+
+    if (version == 1)
+    {
+        SavingObjectV1 v1 = {};
+        if (fread(&v1, sizeof(v1), 1, file) != 1)
+            return false;
+        so->type = v1.type;
+        so->floors = v1.floors;
+        so->x = v1.x;
+        so->y = v1.y;
+        so->place = v1.place;
+        memcpy(so->id, v1.id, sizeof(so->id));
+        return true;
+    }
+
+    SavingObjectV0 v0 = {};
+    if (fread(&v0, sizeof(v0), 1, file) != 1)
+        return false;
+    so->type = v0.type;
+    so->floors = v0.floors;
+    so->x = v0.x;
+    so->y = v0.y;
+    so->place = v0.place;
+    return true;
+}
+
 Dispatcher WorldFile::load(const char *path)
 {
     Mapper mapper = {};
@@ -219,8 +345,34 @@ Dispatcher WorldFile::load(const char *path)
         return dispatcher;
     }
 
+    uint32_t version = 0;
     uint32_t count = 0;
-    if (fread(&count, sizeof(count), 1, file) != 1 || count > 10000)
+    if (fread(&count, sizeof(count), 1, file) != 1)
+    {
+        fclose(file);
+        return dispatcher;
+    }
+
+    if (count == WORLD_FILE_MAGIC)
+    {
+        if (fread(&version, sizeof(version), 1, file) != 1 || version > WORLD_FILE_VERSION)
+        {
+            fprintf(stderr, "WorldFile::load: '%s' has an unsupported version\n", path);
+            fclose(file);
+            return dispatcher;
+        }
+        if (fread(&count, sizeof(count), 1, file) != 1)
+        {
+            fclose(file);
+            return dispatcher;
+        }
+    }
+    else
+    {
+        version = detect_legacy_version(file, count);
+    }
+
+    if (count > 10000)
     {
         fclose(file);
         return dispatcher;
@@ -258,7 +410,7 @@ Dispatcher WorldFile::load(const char *path)
         for (size_t j = 0; j < obj_count; j++)
         {
             SavingObject so = {};
-            if (fread(&so, sizeof(so), 1, file) != 1)
+            if (!read_saving_object(file, version, &so))
             {
                 fclose(file);
                 return dispatcher;
@@ -274,6 +426,7 @@ Dispatcher WorldFile::load(const char *path)
             obj.floors = so.floors;
             obj.x = so.x;
             obj.y = so.y;
+            obj.z = so.z;
             obj.place = (Place *)getptr(&mapper, so.place);
             memcpy(obj.id, so.id, sizeof(obj.id));
             obj.id[sizeof(obj.id) - 1] = '\0';

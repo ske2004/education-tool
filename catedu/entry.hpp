@@ -35,6 +35,8 @@ struct Entry : SokolSetup
     UmkaModule umka_module;
 
     bool show_debug;
+    bool show_imgui_demo = false;
+    bool show_ai_paths = false;
 
     Renderer renderer;
     FpsCounter fps;

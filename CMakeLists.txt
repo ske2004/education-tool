@@ -44,7 +44,9 @@ if (APPLE)
     find_library(METAL Metal)
     find_library(METAL_KIT MetalKit)
     find_library(COCOA_LIBRARY Cocoa ONLY)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${COCOA_LIBRARY} ${METAL} ${METAL_KIT} ${QUARTZ_CORE})
+    # viewport_server.cpp calls OpenGL directly for framebuffer readback.
+    find_library(OPENGL_FRAMEWORK OpenGL)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${COCOA_LIBRARY} ${METAL} ${METAL_KIT} ${QUARTZ_CORE} ${OPENGL_FRAMEWORK})
 endif()
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")

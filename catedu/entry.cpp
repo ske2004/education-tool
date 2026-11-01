@@ -14,83 +14,83 @@ void Entry::frame(void)
 {
     simgui_new_frame({ sapp_width(), sapp_height(), sapp_frame_duration(), sapp_dpi_scale() });
     
-    ImGui::Begin("EduArts Debug");
-    ImGui::Text("Welcome to the ImGui Debug Panel!");
-    if (ImGui::Button("Toggle Demo Window")) {
-        show_debug = !show_debug;
-    }
+    // ImGui debug windows are shown together with the debug tree (F3).
     if (show_debug) {
-        ImGui::ShowDemoWindow(&show_debug);
-    }
-    
-    static bool show_ai_paths = false;
-    ImGui::Checkbox("Show AI Paths", &show_ai_paths);
-    
-    if (show_ai_paths && mode == RuntimeMode::editor && editor.playtesting) {
-        ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
-        Matrix4 vp = editor.editor_camera.cam.vp;
-        float width = sapp_widthf();
-        float height = sapp_heightf();
-        
-        for (auto [id, npc] : iter(editor.playtest.npcs)) {
-            if (npc.path_count == 0) continue;
-            
-            PhysicsBody &b = editor.playtest.physics.bodies.get_assert(npc.body);
-            Vector2 pos = b.area.pos;
-            
-            Vector3 current_point = {pos.x, 0, pos.y};
-            Vector4 proj = vp * Vector4{current_point.x, current_point.y, current_point.z, 1.0f};
-            if (proj.w > 0.0f) {
-                ImVec2 p1 = { (proj.x / proj.w * 0.5f + 0.5f) * width, (0.5f - proj.y / proj.w * 0.5f) * height };
-                
-                for (int i = npc.path_index; i < npc.path_count; i++) {
-                    Vector3 next_point = {(float)npc.path[i].x, 0, (float)npc.path[i].y};
-                    Vector4 next_proj = vp * Vector4{next_point.x, next_point.y, next_point.z, 1.0f};
-                    if (next_proj.w > 0.0f) {
-                        ImVec2 p2 = { (next_proj.x / next_proj.w * 0.5f + 0.5f) * width, (0.5f - next_proj.y / next_proj.w * 0.5f) * height };
-                        draw_list->AddLine(p1, p2, IM_COL32(255, 50, 50, 255), 2.0f);
-                        draw_list->AddCircleFilled(p2, 4.0f, IM_COL32(255, 200, 50, 255));
-                        p1 = p2;
+        ImGui::Begin("EduArts Debug");
+        ImGui::Checkbox("Show ImGui Demo", &show_imgui_demo);
+        if (show_imgui_demo) {
+            ImGui::ShowDemoWindow(&show_imgui_demo);
+        }
+
+        ImGui::Checkbox("Show AI Paths", &show_ai_paths);
+
+        if (show_ai_paths && mode == RuntimeMode::editor && editor.playtesting) {
+            ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
+            Matrix4 vp = editor.editor_camera.cam.vp;
+            float width = sapp_widthf();
+            float height = sapp_heightf();
+
+            for (auto [id, npc] : iter(editor.playtest.npcs)) {
+                if (npc.path_count == 0) continue;
+
+                PhysicsBody &b = editor.playtest.physics.bodies.get_assert(npc.body);
+                Vector2 pos = b.area.pos;
+
+                Vector3 current_point = {pos.x, 0, pos.y};
+                Vector4 proj = vp * Vector4{current_point.x, current_point.y, current_point.z, 1.0f};
+                if (proj.w > 0.0f) {
+                    ImVec2 p1 = { (proj.x / proj.w * 0.5f + 0.5f) * width, (0.5f - proj.y / proj.w * 0.5f) * height };
+
+                    for (int i = npc.path_index; i < npc.path_count; i++) {
+                        Vector3 next_point = {(float)npc.path[i].x, 0, (float)npc.path[i].y};
+                        Vector4 next_proj = vp * Vector4{next_point.x, next_point.y, next_point.z, 1.0f};
+                        if (next_proj.w > 0.0f) {
+                            ImVec2 p2 = { (next_proj.x / next_proj.w * 0.5f + 0.5f) * width, (0.5f - next_proj.y / next_proj.w * 0.5f) * height };
+                            draw_list->AddLine(p1, p2, IM_COL32(255, 50, 50, 255), 2.0f);
+                            draw_list->AddCircleFilled(p2, 4.0f, IM_COL32(255, 200, 50, 255));
+                            p1 = p2;
+                        }
                     }
                 }
             }
         }
-    }
-    ImGui::End();
-
-    if (mode == RuntimeMode::editor && editor.playtesting) {
-        ImGui::Begin("Simulation State");
-        
-        int hours = (int)editor.playtest.world.time_of_day;
-        int mins = (int)((editor.playtest.world.time_of_day - hours) * 60);
-        ImGui::Text("Time of Day: %02d:%02d", hours, mins);
-        ImGui::Separator();
-        
-        ImGui::Text("Inventory (%zu / %d):", editor.playtest.world.player_inventory.items.size(), editor.playtest.world.player_inventory.capacity);
-        
-        if (editor.playtest.world.player_inventory.items.empty()) {
-            ImGui::TextDisabled("Inventory is empty.");
-        } else {
-            if (ImGui::BeginTable("inventory_table", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-                ImGui::TableSetupColumn("Item");
-                ImGui::TableSetupColumn("Amount");
-                ImGui::TableSetupColumn("Description");
-                ImGui::TableHeadersRow();
-                
-                for (const auto& item : editor.playtest.world.player_inventory.items) {
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-                    ImGui::TextUnformatted(item.name.c_str());
-                    ImGui::TableNextColumn();
-                    ImGui::Text("%d", item.amount);
-                    ImGui::TableNextColumn();
-                    ImGui::TextUnformatted(item.description.c_str());
-                }
-                ImGui::EndTable();
-            }
-        }
         ImGui::End();
+
+        if (mode == RuntimeMode::editor && editor.playtesting) {
+            ImGui::Begin("Simulation State");
+
+            int hours = (int)editor.playtest.world.time_of_day;
+            int mins = (int)((editor.playtest.world.time_of_day - hours) * 60);
+            ImGui::Text("Time of Day: %02d:%02d", hours, mins);
+            ImGui::Separator();
+
+            ImGui::Text("Inventory (%zu / %d):", editor.playtest.world.player_inventory.items.size(), editor.playtest.world.player_inventory.capacity);
+
+            if (editor.playtest.world.player_inventory.items.empty()) {
+                ImGui::TextDisabled("Inventory is empty.");
+            } else {
+                if (ImGui::BeginTable("inventory_table", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                    ImGui::TableSetupColumn("Item");
+                    ImGui::TableSetupColumn("Amount");
+                    ImGui::TableSetupColumn("Description");
+                    ImGui::TableHeadersRow();
+
+                    for (const auto& item : editor.playtest.world.player_inventory.items) {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::TextUnformatted(item.name.c_str());
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%d", item.amount);
+                        ImGui::TableNextColumn();
+                        ImGui::TextUnformatted(item.description.c_str());
+                    }
+                    ImGui::EndTable();
+                }
+            }
+            ImGui::End();
+        }
     }
+
     fps.update();
 
     bool reload_module = false;
@@ -229,7 +229,7 @@ void Entry::init()
 
 void Entry::input(const sapp_event *event)
 {
-    simgui_handle_event(event);
+    bool imgui_captured = simgui_handle_event(event);
     if (event->type == SAPP_EVENTTYPE_QUIT_REQUESTED)
     {
         if (this->editor.dispatcher.dirty)
@@ -242,6 +242,12 @@ void Entry::input(const sapp_event *event)
     if (event->type == SAPP_EVENTTYPE_UNFOCUSED)
     {
         this->ui_state.input.reset();
+    }
+
+    // Don't let clicks/typing inside ImGui windows reach the editor or game.
+    if (imgui_captured)
+    {
+        return;
     }
 
     if (ui_state.feed_event(event))

@@ -310,10 +310,6 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
     if (input.k[SAPP_KEYCODE_SPACE].pressed && player_vz == 0.0f) {
         player_vz = 0.2f;
     }
-    
-    if (input.k[SAPP_KEYCODE_N].pressed) {
-        world.time_of_day = 8.0f;
-    }
 
     movement *= 0.2f;
 
