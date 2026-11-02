@@ -294,3 +294,73 @@ TEST(GltfExport, SingleSceneInteriorsOption)
     cgltf_free(data);
     world.destroy();
 }
+
+static void test_gltf_export_merged_object_meshes()
+{
+    World world = World::create();
+
+    Object building = make_object(Object::Type::building, 0, 0);
+    building.floors = 3;
+    REQUIRE_TRUE(world.first->place_object(building));
+
+    Object castle = make_object(Object::Type::castle, 12, 0);
+    castle.floors = 2;
+    REQUIRE_TRUE(world.first->place_object(castle));
+
+    Object npc = make_object(Object::Type::npc, 4, 4);
+    strcpy(npc.id, "mayor");
+    REQUIRE_TRUE(world.first->place_object(npc));
+
+    Object item = make_object(Object::Type::item, 6, 4);
+    strcpy(item.id, "golden_key");
+    REQUIRE_TRUE(world.first->place_object(item));
+
+    REQUIRE_TRUE(world.first->place_object(make_prop("bench", 8, 4)));
+    REQUIRE_TRUE(world.first->place_object(make_prop("barrel", 10, 4)));
+
+    GltfExportOptions unmerged_opts = {};
+    unmerged_opts.merge_object_meshes = false;
+    cgltf_data *unmerged = export_and_parse(world, unmerged_opts);
+    REQUIRE_TRUE(unmerged != nullptr);
+
+    GltfExportOptions merged_opts = {};
+    merged_opts.merge_object_meshes = true;
+    cgltf_data *merged = export_and_parse(world, merged_opts);
+    REQUIRE_TRUE(merged != nullptr);
+
+    // Merged export must have significantly fewer total nodes than unmerged
+    CHECK_TRUE(merged->nodes_count < unmerged->nodes_count);
+    CHECK_TRUE(merged->nodes_count + 20 <= unmerged->nodes_count);
+
+    // Top-level scene object nodes and their extras are preserved
+    CHECK_EQ(merged->scene->nodes_count, unmerged->scene->nodes_count);
+
+    cgltf_node *building_node = find_node(merged, "building");
+    REQUIRE_TRUE(building_node && building_node->extras.data);
+    CHECK_TRUE(strstr(building_node->extras.data, "\"type\":\"building\""));
+    CHECK_TRUE(strstr(building_node->extras.data, "\"floors\":3"));
+
+    cgltf_node *npc_node = find_node(merged, "npc");
+    REQUIRE_TRUE(npc_node && npc_node->extras.data);
+    CHECK_TRUE(strstr(npc_node->extras.data, "\"type\":\"npc\""));
+    CHECK_TRUE(strstr(npc_node->extras.data, "\"id\":\"mayor\""));
+
+    cgltf_node *item_node = find_node(merged, "item");
+    REQUIRE_TRUE(item_node && item_node->extras.data);
+    CHECK_TRUE(strstr(item_node->extras.data, "\"type\":\"item\""));
+    CHECK_TRUE(strstr(item_node->extras.data, "\"id\":\"golden_key\""));
+
+    cgltf_node *barrel_node = find_node(merged, "barrel");
+    REQUIRE_TRUE(barrel_node && barrel_node->extras.data);
+    CHECK_TRUE(strstr(barrel_node->extras.data, "\"id\":\"barrel\""));
+
+    cgltf_free(merged);
+    cgltf_free(unmerged);
+    world.destroy();
+}
+
+TEST(GltfExport, MergedObjectMeshes)
+{
+    test_gltf_export_merged_object_meshes();
+}
+

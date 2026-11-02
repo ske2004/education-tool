@@ -5,6 +5,7 @@
 struct GltfExportOptions
 {
     bool single_scene_interiors = false;
+    bool merge_object_meshes = false;
 };
 
 // Writes the world as a binary glTF file (.glb) for other tools and engines.

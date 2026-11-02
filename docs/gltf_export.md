@@ -54,17 +54,21 @@ Programmatic export is available via `export_world_gltf` in
   ```json
   {"type": "building", "x": 8, "y": -4, "floors": 3, "interior_scene": 1, "interior_node": 7}
   {"type": "prop", "x": 2, "y": 5, "floors": 0, "id": "barrel"}
+  {"type": "npc", "x": 4, "y": 4, "floors": 1, "id": "mayor"}
   ```
 
-  `x` and `y` are the editor's grid coordinates. `interior_scene` is the index
-  of the scene holding the building's interior. When `single_scene_interiors` is
-  enabled, `interior_node` is the node index of the interior root in scene 0.
-  Blender shows extras as custom properties, and Godot imports them as node
-  metadata.
-- **Meshes and materials.** Geometry is shared: every box is one cube mesh
-  instanced with a transform, and each source model is stored once. Textures
-  are embedded as PNGs. Object colors become `baseColorFactor`, converted from
-  sRGB to linear as glTF requires.
+  `x` and `y` are the editor's grid coordinates. `id` is emitted for props and
+  any named object (`obj.id[0] != '\0'`, such as named NPCs and items).
+  `interior_scene` is the index of the scene holding the building's interior.
+  When `single_scene_interiors` is enabled, `interior_node` is the node index of
+  the interior root in scene 0. Blender shows extras as custom properties, and
+  Godot imports them as node metadata.
+- **Meshes and materials.** Geometry is shared: by default, every box is one cube
+  mesh instanced with a transform, and each source model is stored once. When
+  `merge_object_meshes` is enabled, an object's box primitives are grouped by
+  material and merged into a single mesh node per color/material. Textures are
+  embedded as PNGs. Object colors become `baseColorFactor`, converted from sRGB
+  to linear as glTF requires.
 
 ## Export Options
 
@@ -74,6 +78,7 @@ The exporter accepts optional configuration via `GltfExportOptions`:
 struct GltfExportOptions
 {
     bool single_scene_interiors = false;
+    bool merge_object_meshes = false;
 };
 
 bool export_world_gltf(const char *path, World &world,
@@ -86,6 +91,52 @@ bool export_world_gltf(const char *path, World &world,
   `interior_index * 64.0f` and Y by `-32.0f`). This allows single-scene
   importers like Godot and Unity to load all interior models and geometry from
   the default scene without needing multi-scene import support.
+- **`merge_object_meshes`**: When set to `true`, all box draws within an object
+  (`cube`, `cube_shaded`, `cube_window`) that share the same material/color are
+  transformed by their local `Matrix4` and combined into a single merged mesh
+  node per color/material (while non-box 3D models remain regular child nodes).
+  This significantly reduces the total glTF node count and draw calls for
+  complex procedural objects like multi-floor buildings and castles.
+
+## Engine Import Helper Scripts
+
+Ready-to-use post-import scripts are provided in `scripts/` to automatically
+reconstruct physics colliders, door triggers, spawn points, and lighting from
+the exported `.glb`:
+
+### Godot 4 (`scripts/godot_import_educore.gd`)
+
+1. Copy `assets/world.glb` and `scripts/godot_import_educore.gd` into your
+   Godot 4 project.
+2. Select `world.glb` in the FileSystem dock, open the **Import** dock, set
+   **Import Script -> Path** to `res://godot_import_educore.gd`, and click
+   **Reimport**.
+3. The script (`@tool extends EditorScenePostImport`) automatically:
+   - Reads scene `extras` (`time_of_day`, `sun_light`, `script`), attaches them
+     as scene metadata, and creates a `DirectionalLight3D` (`EducoreSunLight`).
+   - Reads each object node's `extras` (`type`, `x`, `y`, `floors`, `id`,
+     `interior_scene`, `interior_node`).
+   - Creates `StaticBody3D` + `CollisionShape3D` (`BoxShape3D`) for `building`,
+     `castle`, `wall`, `tree`, `water`, `prop`, and `ground`.
+   - Creates `Area3D` door triggers (`DoorTrigger` in group `"educore_door"`)
+     at building entrances storing `interior_scene` and `interior_node` metadata.
+   - Adds a `Marker3D` (`PlayerSpawn` in group `"player_spawn"`) on `player`
+     nodes and `Area3D` interaction triggers on `npc` and `item` nodes.
+
+### Unity (`scripts/UnityEducoreImporter.cs`)
+
+1. Place `scripts/UnityEducoreImporter.cs` inside an `Assets/Editor/` folder in
+   your Unity project (alongside a glTF 2.0 importer such as glTFast or
+   UnityGLTF).
+2. When `world.glb` is imported, `UnityEducoreImporter` (`AssetPostprocessor`):
+   - Configures or creates a directional `Light` (`EducoreSunLight`) with soft
+     shadows.
+   - Adds sized `BoxCollider` components to buildings, castles, walls, trees,
+     water, props, and ground nodes.
+   - Creates `DoorTrigger` child objects with trigger `BoxCollider` and
+     `EducoreDoorTrigger` components wired to `targetInteriorRoot`.
+   - Attaches `EducoreSpawnPoint` (tagged `"Respawn"`) to `player` nodes and
+     `EducoreObjectMetadata` + trigger colliders to `npc` and `item` nodes.
 
 ## Coordinate system
 
@@ -124,9 +175,4 @@ export without a graphics context.
    instead of writing it to the in-memory filesystem.
 2. **Choose the output path.** A save dialog on desktop, or at least a
    timestamped file name so exports don't overwrite each other.
-3. **Godot and Unity import helpers.** A small import script per engine that
-   reads `extras` and swaps object nodes for engine prefabs (spawn points for
-   `player`, NPCs with their dialogue, doors that load `interior_scene` /
-   `interior_node`).
-4. **Merge static geometry.** An option to merge each object's boxes into one
-   mesh per material, for engines that handle many small nodes poorly.
+

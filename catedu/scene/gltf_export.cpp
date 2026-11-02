@@ -27,6 +27,10 @@ struct GltfGeometry
     std::string path;
     // Accessor indices, -1 when the source model doesn't have the attribute.
     int position, normal, uv, indices;
+    std::vector<float> raw_positions;
+    std::vector<float> raw_normals;
+    std::vector<float> raw_uvs;
+    std::vector<uint32_t> raw_indices;
 };
 
 // A model from the resource spec, resolved to what the file stores for it.
@@ -257,7 +261,7 @@ static int add_geometry(GltfExport &e, const char *path, const RawModel &raw)
         return -1;
     }
 
-    GltfGeometry geometry = {path, -1, -1, -1, -1};
+    GltfGeometry geometry = {path, -1, -1, -1, -1, {}, {}, {}, {}};
 
     std::vector<float> positions = unpack_floats(position);
     for (size_t i = 2; i < positions.size(); i += 3)
@@ -265,6 +269,7 @@ static int add_geometry(GltfExport &e, const char *path, const RawModel &raw)
         positions[i] = -positions[i];
     }
     geometry.position = add_positions(e, positions);
+    geometry.raw_positions = positions;
 
     if (normal)
     {
@@ -276,6 +281,7 @@ static int add_geometry(GltfExport &e, const char *path, const RawModel &raw)
         geometry.normal =
             add_accessor(e, normals.data(), normal->count, GLTF_FLOAT, "VEC3",
                          3, GLTF_ARRAY_BUFFER);
+        geometry.raw_normals = normals;
     }
 
     if (uv)
@@ -283,6 +289,7 @@ static int add_geometry(GltfExport &e, const char *path, const RawModel &raw)
         std::vector<float> uvs = unpack_floats(uv);
         geometry.uv = add_accessor(e, uvs.data(), uv->count, GLTF_FLOAT, "VEC2",
                                    2, GLTF_ARRAY_BUFFER);
+        geometry.raw_uvs = uvs;
     }
 
     std::vector<uint32_t> indices;
@@ -312,6 +319,7 @@ static int add_geometry(GltfExport &e, const char *path, const RawModel &raw)
     geometry.indices =
         add_accessor(e, indices.data(), indices.size(), GLTF_UNSIGNED_INT,
                      "SCALAR", 1, GLTF_ELEMENT_ARRAY_BUFFER);
+    geometry.raw_indices = indices;
 
     e.geometries.push_back(geometry);
     return (int)e.geometries.size() - 1;
@@ -454,6 +462,206 @@ static void add_draw(void *user, const GenDraw &draw)
     e.nodes[sink->parent].children.push_back(node);
 }
 
+static bool is_box_draw(const GltfExport &e, const GenDraw &draw)
+{
+    if (draw.model == &e.resources->box ||
+        draw.model == &e.resources->box_shaded ||
+        draw.model == &e.resources->box_window)
+    {
+        return true;
+    }
+    return draw.model_name &&
+           (strcmp(draw.model_name, "cube") == 0 ||
+            strcmp(draw.model_name, "cube_shaded") == 0 ||
+            strcmp(draw.model_name, "cube_window") == 0);
+}
+
+struct CollectedDrawList
+{
+    std::vector<GenDraw> draws;
+};
+
+static void collect_draw(void *user, const GenDraw &draw)
+{
+    CollectedDrawList *list = (CollectedDrawList *)user;
+    list->draws.push_back(draw);
+}
+
+struct MergedBoxGroup
+{
+    std::string model_name;
+    int src_geometry;
+    int material;
+    std::vector<Matrix4> matrices;
+};
+
+static void emit_object_draws(GltfExport &e, int parent, const Object &object)
+{
+    NodeSink sink = {&e, parent};
+    if (!e.options.merge_object_meshes)
+    {
+        emit_place_object({add_draw, &sink}, *e.resources, object,
+                          Matrix4::identity());
+        return;
+    }
+
+    CollectedDrawList collected;
+    emit_place_object({collect_draw, &collected}, *e.resources, object,
+                      Matrix4::identity());
+
+    std::vector<MergedBoxGroup> groups;
+    for (const GenDraw &draw : collected.draws)
+    {
+        if (!is_box_draw(e, draw))
+        {
+            add_draw(&sink, draw);
+            continue;
+        }
+
+        const GltfModel *model = find_model(e, draw.model_name);
+        if (model->geometry < 0)
+        {
+            continue;
+        }
+        int src_geom = model->geometry;
+        int material = add_material(e, model->image, draw.color);
+
+        MergedBoxGroup *found = nullptr;
+        for (MergedBoxGroup &g : groups)
+        {
+            if (g.material == material && g.src_geometry == src_geom)
+            {
+                found = &g;
+                break;
+            }
+        }
+        if (!found)
+        {
+            groups.push_back(
+                {draw.model_name, src_geom, material, {draw.matrix}});
+        }
+        else
+        {
+            found->matrices.push_back(draw.matrix);
+        }
+    }
+
+    for (const MergedBoxGroup &group : groups)
+    {
+        const GltfGeometry src = e.geometries[group.src_geometry];
+        size_t vert_count = src.raw_positions.size() / 3;
+        if (vert_count == 0)
+        {
+            continue;
+        }
+
+        std::vector<float> merged_pos;
+        std::vector<float> merged_norm;
+        std::vector<float> merged_uv;
+        std::vector<uint32_t> merged_idx;
+
+        merged_pos.reserve(src.raw_positions.size() * group.matrices.size());
+        merged_norm.reserve(src.raw_normals.size() * group.matrices.size());
+        merged_uv.reserve(src.raw_uvs.size() * group.matrices.size());
+        merged_idx.reserve(src.raw_indices.size() * group.matrices.size());
+
+        for (const Matrix4 &local_mat : group.matrices)
+        {
+            Matrix4 m = mirror_z(local_mat);
+            Matrix4 inv_m = Matrix4::identity();
+            bool has_inv = m.inverse(&inv_m);
+
+            uint32_t base_vertex = (uint32_t)(merged_pos.size() / 3);
+
+            for (size_t v = 0; v < vert_count; v++)
+            {
+                Vector3 p = {src.raw_positions[v * 3 + 0],
+                             src.raw_positions[v * 3 + 1],
+                             src.raw_positions[v * 3 + 2]};
+                Vector3 tp = m * p;
+                merged_pos.push_back(tp.x);
+                merged_pos.push_back(tp.y);
+                merged_pos.push_back(tp.z);
+            }
+
+            if (src.raw_normals.size() == vert_count * 3)
+            {
+                for (size_t v = 0; v < vert_count; v++)
+                {
+                    float nx = src.raw_normals[v * 3 + 0];
+                    float ny = src.raw_normals[v * 3 + 1];
+                    float nz = src.raw_normals[v * 3 + 2];
+                    Vector3 tn;
+                    if (has_inv)
+                    {
+                        tn = {inv_m.values[0] * nx + inv_m.values[1] * ny +
+                                  inv_m.values[2] * nz,
+                              inv_m.values[4] * nx + inv_m.values[5] * ny +
+                                  inv_m.values[6] * nz,
+                              inv_m.values[8] * nx + inv_m.values[9] * ny +
+                                  inv_m.values[10] * nz};
+                    }
+                    else
+                    {
+                        tn = {m.values[0] * nx + m.values[4] * ny +
+                                  m.values[8] * nz,
+                              m.values[1] * nx + m.values[5] * ny +
+                                  m.values[9] * nz,
+                              m.values[2] * nx + m.values[6] * ny +
+                                  m.values[10] * nz};
+                    }
+                    float len = vector3_length(tn);
+                    if (len > 0.0f)
+                    {
+                        tn = tn / len;
+                    }
+                    merged_norm.push_back(tn.x);
+                    merged_norm.push_back(tn.y);
+                    merged_norm.push_back(tn.z);
+                }
+            }
+
+            if (src.raw_uvs.size() == vert_count * 2)
+            {
+                merged_uv.insert(merged_uv.end(), src.raw_uvs.begin(),
+                                 src.raw_uvs.end());
+            }
+
+            for (uint32_t idx : src.raw_indices)
+            {
+                merged_idx.push_back(base_vertex + idx);
+            }
+        }
+
+        GltfGeometry merged_geom = {"", -1, -1, -1, -1, {}, {}, {}, {}};
+        merged_geom.position = add_positions(e, merged_pos);
+        if (!merged_norm.empty())
+        {
+            merged_geom.normal =
+                add_accessor(e, merged_norm.data(), merged_norm.size() / 3,
+                             GLTF_FLOAT, "VEC3", 3, GLTF_ARRAY_BUFFER);
+        }
+        if (!merged_uv.empty())
+        {
+            merged_geom.uv =
+                add_accessor(e, merged_uv.data(), merged_uv.size() / 2,
+                             GLTF_FLOAT, "VEC2", 2, GLTF_ARRAY_BUFFER);
+        }
+        merged_geom.indices =
+            add_accessor(e, merged_idx.data(), merged_idx.size(),
+                         GLTF_UNSIGNED_INT, "SCALAR", 1,
+                         GLTF_ELEMENT_ARRAY_BUFFER);
+
+        e.geometries.push_back(merged_geom);
+        int geom_idx = (int)e.geometries.size() - 1;
+        int mesh =
+            add_mesh(e, group.model_name.c_str(), geom_idx, group.material);
+        int child = add_node(e, group.model_name.c_str(), Matrix4::identity(),
+                             mesh);
+        e.nodes[parent].children.push_back(child);
+    }
+}
+
 static int export_interior_node(GltfExport &e, Place &place, const char *name,
                                 int interior_index)
 {
@@ -475,15 +683,13 @@ static int export_interior_node(GltfExport &e, Place &place, const char *name,
                             place_object_matrix(object));
         e.nodes[root].children.push_back(node);
 
-        NodeSink sink = {&e, node};
-        emit_place_object({add_draw, &sink}, *e.resources, object,
-                          Matrix4::identity());
+        emit_object_draws(e, node, object);
 
         std::string extras = "{\"type\":";
         append_json_string(extras, type_name);
         appendf(extras, ",\"x\":%.9g,\"y\":%.9g,\"floors\":%d", object.x,
                 object.y, object.floors);
-        if (object.type == Object::Type::prop)
+        if (object.type == Object::Type::prop || object.id[0] != '\0')
         {
             extras += ",\"id\":";
             append_json_string(extras, object.id);
@@ -525,15 +731,13 @@ static int export_place(GltfExport &e, Place &place, const char *name)
                             place_object_matrix(object));
         e.scenes[scene].nodes.push_back(node);
 
-        NodeSink sink = {&e, node};
-        emit_place_object({add_draw, &sink}, *e.resources, object,
-                          Matrix4::identity());
+        emit_object_draws(e, node, object);
 
         std::string extras = "{\"type\":";
         append_json_string(extras, type_name);
         appendf(extras, ",\"x\":%.9g,\"y\":%.9g,\"floors\":%d", object.x,
                 object.y, object.floors);
-        if (object.type == Object::Type::prop)
+        if (object.type == Object::Type::prop || object.id[0] != '\0')
         {
             extras += ",\"id\":";
             append_json_string(extras, object.id);
