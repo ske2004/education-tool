@@ -458,6 +458,7 @@ def main(argv=None):
     parser.add_argument("--out", type=Path, default=HERE / "out", help="output directory (default agents/out)")
     parser.add_argument("--quiet", action="store_true", help="don't print what happens")
     parser.add_argument("--parallel", action="store_true", help="run agent decisions concurrently in each turn")
+    parser.add_argument("--firefox", "--open", dest="open_browser", action="store_true", help="open the generated replay in Firefox")
     args = parser.parse_args(argv)
 
     personas = PERSONAS[: args.agents]
@@ -480,6 +481,27 @@ def main(argv=None):
 
     print(f"Used {mind.usage()}.")
     print(f"Replay: {page}")
+    if args.open_browser:
+        open_in_firefox(page)
+
+
+def open_in_firefox(path: Path) -> None:
+    """Open an HTML file in Firefox (or default browser fallback)."""
+    import shutil
+    import subprocess
+    import webbrowser
+
+    uri = path.resolve().as_uri()
+    firefox_bin = shutil.which("firefox")
+    if firefox_bin:
+        subprocess.Popen(
+            [firefox_bin, uri],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    else:
+        webbrowser.open(uri)
 
 
 if __name__ == "__main__":

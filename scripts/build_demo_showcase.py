@@ -477,6 +477,13 @@ def main(argv=None) -> int:
     parser.add_argument("--turns", type=int, default=15, help="number of turns to simulate (default 15)")
     parser.add_argument("--seed", type=int, default=7, help="town layout seed (default 7)")
     parser.add_argument("--out", type=Path, default=ROOT / "agents" / "out", help="output directory")
+    parser.add_argument(
+        "--firefox",
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        help="open the generated showcase.html in Firefox",
+    )
     args = parser.parse_args(argv)
 
     ensure_normal_binary()
@@ -514,6 +521,8 @@ def main(argv=None) -> int:
         f"{glb_summary.get('meshes', 0)} meshes, "
         f"{len(replay.get('events', []))} agent events)"
     )
+    if args.open_browser:
+        demo.open_in_firefox(showcase_path)
     return 0
 
 
