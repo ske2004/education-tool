@@ -780,6 +780,8 @@ static const char *script_node_type_name(ScriptNode::Type type)
         return "teleport";
     case ScriptNode::Type::give_item:
         return "give_item";
+    case ScriptNode::Type::check_item:
+        return "check_item";
     default:
         return "unknown";
     }
@@ -809,7 +811,8 @@ static const char *script_node_text(const ScriptNode &node)
     {
         return node.say;
     }
-    else if (node.type == ScriptNode::Type::yesno)
+    else if (node.type == ScriptNode::Type::yesno ||
+             node.type == ScriptNode::Type::check_item)
     {
         return node.yesno.question;
     }
