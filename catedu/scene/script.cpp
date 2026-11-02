@@ -50,7 +50,8 @@ Script Script::clone()
         fixer.add_mapping(&a, b);
         fixer.add_pointer(&b->parent);
         fixer.add_pointer(&b->next);
-        if (b->type == ScriptNode::Type::yesno)
+        if (b->type == ScriptNode::Type::yesno ||
+            b->type == ScriptNode::Type::check_item)
         {
             fixer.add_pointer(&b->yesno.yes);
             fixer.add_pointer(&b->yesno.no);

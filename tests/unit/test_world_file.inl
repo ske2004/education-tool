@@ -116,3 +116,57 @@ TEST(WorldFile, RejectsNewerVersion)
     d.destroy();
     remove(path);
 }
+
+TEST(WorldFile, RoundTripsCheckItemScriptNode)
+{
+    Dispatcher d = Dispatcher::create();
+    Script *s = d.world.script;
+    ScriptNode *root = s->acquire_start_event();
+    s->root = root;
+
+    ScriptNode *check = s->append_node(ScriptNode::Type::check_item, root);
+    strcpy(check->yesno.question, "ScienceBadge");
+
+    check->yesno.yes = s->append_node(ScriptNode::Type::event, check);
+    check->yesno.yes->event = ScriptNode::EventType::yes;
+    ScriptNode *yes_say = s->append_node(ScriptNode::Type::say, check->yesno.yes);
+    strcpy(yes_say->say, "You have the ScienceBadge!");
+
+    check->yesno.no = s->append_node(ScriptNode::Type::event, check);
+    check->yesno.no->event = ScriptNode::EventType::no;
+    ScriptNode *no_say = s->append_node(ScriptNode::Type::say, check->yesno.no);
+    strcpy(no_say->say, "Find the ScienceBadge first.");
+
+    const char *path = "bin/test_world_check_item.dat";
+    REQUIRE_TRUE(WorldFile::save(path, d));
+
+    Dispatcher loaded = WorldFile::load(path);
+    REQUIRE_NE(loaded.world.script->root, nullptr);
+    ScriptNode *loaded_check = loaded.world.script->root->next;
+    REQUIRE_NE(loaded_check, nullptr);
+    CHECK_EQ((int)loaded_check->type, (int)ScriptNode::Type::check_item);
+    CHECK_STREQ(loaded_check->yesno.question, "ScienceBadge");
+
+    REQUIRE_NE(loaded_check->yesno.yes, nullptr);
+    CHECK_EQ((int)loaded_check->yesno.yes->event, (int)ScriptNode::EventType::yes);
+    REQUIRE_NE(loaded_check->yesno.yes->next, nullptr);
+    CHECK_STREQ(loaded_check->yesno.yes->next->say, "You have the ScienceBadge!");
+
+    REQUIRE_NE(loaded_check->yesno.no, nullptr);
+    CHECK_EQ((int)loaded_check->yesno.no->event, (int)ScriptNode::EventType::no);
+    REQUIRE_NE(loaded_check->yesno.no->next, nullptr);
+    CHECK_STREQ(loaded_check->yesno.no->next->say, "Find the ScienceBadge first.");
+
+    Script cloned = loaded.world.script->clone();
+    REQUIRE_NE(cloned.root, nullptr);
+    REQUIRE_NE(cloned.root->next, nullptr);
+    CHECK_EQ((int)cloned.root->next->type, (int)ScriptNode::Type::check_item);
+    CHECK_STREQ(cloned.root->next->yesno.question, "ScienceBadge");
+    REQUIRE_NE(cloned.root->next->yesno.yes, nullptr);
+    REQUIRE_NE(cloned.root->next->yesno.no, nullptr);
+    cloned.destroy();
+
+    d.destroy();
+    loaded.destroy();
+    remove(path);
+}
