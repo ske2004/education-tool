@@ -5,6 +5,7 @@
 #include "catedu/gui/editor/edit_line.hpp"
 #include "catedu/gui/editor/playtest.hpp"
 #include "catedu/scene/navigation.hpp"
+#include "catedu/scene/sample_world.hpp"
 #include "tau/tau.h"
 
 // Helper: create a test dispatcher (no file I/O or rendering needed)
@@ -1000,4 +1001,181 @@ TEST(Playtest, NoHardcodedItemsAndWaterColliderSkippedWhenBridged)
     playtest.destroy();
 }
 
+TEST(SampleWorld, PopulatesNamedNpcsItemsPropsAndEducationalScript)
+{
+    Dispatcher disp = generate_sample_world();
+    Place *outdoor = disp.world.first;
+    REQUIRE_TRUE(outdoor != nullptr);
+    CHECK_EQ(disp.world.current, outdoor);
 
+    int place_count = 0;
+    int interior_with_props_count = 0;
+    int total_npc_count = 0;
+    int named_npc_count = 0;
+    int total_item_count = 0;
+    int named_item_count = 0;
+    int total_prop_count = 0;
+    int named_prop_count = 0;
+
+    bool found_mayor = false;
+    bool found_engineer = false;
+    bool found_botanist = false;
+    bool found_librarian = false;
+    bool found_solar_lens = false;
+    bool found_ancient_gear = false;
+
+    bool has_road = false;
+    bool has_building = false;
+    bool has_water = false;
+    bool has_tree = false;
+    bool has_animal = false;
+    bool has_high_grass = false;
+    bool has_player = false;
+    int outdoor_prop_count = 0;
+
+    for (auto &place : iter(disp.world.places))
+    {
+        place_count++;
+        int place_props = 0;
+        bool place_has_player = false;
+
+        for (auto &obj : iter(place.objects))
+        {
+            if (obj.type == Object::Type::player)
+            {
+                place_has_player = true;
+                if (&place == outdoor)
+                    has_player = true;
+            }
+            else if (obj.type == Object::Type::road)
+            {
+                has_road = true;
+            }
+            else if (obj.type == Object::Type::building)
+            {
+                has_building = true;
+                CHECK_TRUE(obj.place != nullptr);
+            }
+            else if (obj.type == Object::Type::water)
+            {
+                has_water = true;
+            }
+            else if (obj.type == Object::Type::tree)
+            {
+                has_tree = true;
+            }
+            else if (obj.type == Object::Type::animal)
+            {
+                has_animal = true;
+            }
+            else if (obj.type == Object::Type::high_grass)
+            {
+                has_high_grass = true;
+            }
+            else if (obj.type == Object::Type::npc)
+            {
+                total_npc_count++;
+                if (obj.id[0] != '\0')
+                    named_npc_count++;
+                if (strcmp(obj.id, "Mayor") == 0)
+                    found_mayor = true;
+                if (strcmp(obj.id, "Engineer") == 0)
+                    found_engineer = true;
+                if (strcmp(obj.id, "Botanist") == 0)
+                    found_botanist = true;
+                if (strcmp(obj.id, "Librarian") == 0)
+                    found_librarian = true;
+            }
+            else if (obj.type == Object::Type::item)
+            {
+                total_item_count++;
+                if (obj.id[0] != '\0')
+                    named_item_count++;
+                if (strcmp(obj.id, "Solar Lens") == 0)
+                    found_solar_lens = true;
+                if (strcmp(obj.id, "Ancient Gear") == 0)
+                    found_ancient_gear = true;
+            }
+            else if (obj.type == Object::Type::prop)
+            {
+                total_prop_count++;
+                place_props++;
+                if (obj.id[0] != '\0')
+                    named_prop_count++;
+                if (&place == outdoor)
+                    outdoor_prop_count++;
+            }
+        }
+
+        CHECK_TRUE(place_has_player);
+        if (place.interior && place_props > 0)
+        {
+            interior_with_props_count++;
+        }
+    }
+
+    // 1 outdoor place + 3 building interiors
+    CHECK_EQ(place_count, 4);
+    CHECK_EQ(interior_with_props_count, 3);
+
+    CHECK_TRUE(has_road);
+    CHECK_TRUE(has_building);
+    CHECK_TRUE(has_water);
+    CHECK_TRUE(has_tree);
+    CHECK_TRUE(has_animal);
+    CHECK_TRUE(has_high_grass);
+    CHECK_TRUE(has_player);
+
+    // All NPCs and quest items have non-empty IDs
+    CHECK_GE(total_npc_count, 4);
+    CHECK_EQ(named_npc_count, total_npc_count);
+    CHECK_TRUE(found_mayor);
+    CHECK_TRUE(found_engineer);
+    CHECK_TRUE(found_botanist);
+    CHECK_TRUE(found_librarian);
+
+    CHECK_GE(total_item_count, 2);
+    CHECK_EQ(named_item_count, total_item_count);
+    CHECK_TRUE(found_solar_lens);
+    CHECK_TRUE(found_ancient_gear);
+
+    CHECK_GT(outdoor_prop_count, 0);
+    CHECK_GT(total_prop_count, outdoor_prop_count);
+    CHECK_EQ(named_prop_count, total_prop_count);
+
+    // Verify script structure (start event + 3 place events + yes/no branch)
+    Script *script = disp.world.script;
+    REQUIRE_TRUE(script != nullptr);
+    ScriptNode *start_ev = script->get_start_event();
+    REQUIRE_TRUE(start_ev != nullptr);
+    CHECK_EQ(script->root, start_ev);
+    REQUIRE_TRUE(start_ev->next != nullptr);
+    CHECK_EQ((int)start_ev->next->type, (int)ScriptNode::Type::say);
+    CHECK_TRUE(start_ev->next->say[0] != '\0');
+
+    for (auto &place : iter(disp.world.places))
+    {
+        if (place.interior)
+        {
+            ScriptNode *pev = script->get_place_event(&place);
+            REQUIRE_TRUE(pev != nullptr);
+            REQUIRE_TRUE(pev->next != nullptr);
+            if (pev->next->type == ScriptNode::Type::yesno)
+            {
+                REQUIRE_TRUE(pev->next->yesno.yes != nullptr);
+                REQUIRE_TRUE(pev->next->yesno.no != nullptr);
+                ScriptNode *give = pev->next->yesno.yes->next;
+                REQUIRE_TRUE(give != nullptr);
+                CHECK_EQ((int)give->type, (int)ScriptNode::Type::give_item);
+                CHECK_STREQ(give->say, "Crystal");
+                ScriptNode *tp = give->next;
+                REQUIRE_TRUE(tp != nullptr);
+                CHECK_EQ((int)tp->type, (int)ScriptNode::Type::teleport);
+                REQUIRE_TRUE(tp->next != nullptr);
+                CHECK_EQ((int)tp->next->type, (int)ScriptNode::Type::say);
+            }
+        }
+    }
+
+    disp.destroy();
+}
