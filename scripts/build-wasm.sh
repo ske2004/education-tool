@@ -13,6 +13,7 @@ emcc -I.\
   -sTOTAL_MEMORY=64MB\
   -s ALLOW_MEMORY_GROWTH=1\
   -s EXPORTED_FUNCTIONS="['_malloc', '_calloc', '_free', '_main']"\
+  -s EXPORTED_RUNTIME_METHODS="['FS']"\
   -lGL\
   -lc\
   -lm\

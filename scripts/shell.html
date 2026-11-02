@@ -3,31 +3,306 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"/>
-    <title>Educat</title>
+    <title>Educore 3D Studio — WebAssembly Edition</title>
     <style>
-        body { margin: 0; background-color: black }
-        .game {
-          position: absolute;
-          top: 0px;
-          left: 0px;
-          margin: 0px;
-          border: 0;
-          overflow: hidden;
-          display: block;
-          width: 100%;
-          height: 100%;
-        }
+      :root {
+        --bg-dark: #0d1117;
+        --bar-bg: rgba(17, 24, 39, 0.92);
+        --border-subtle: rgba(255, 255, 255, 0.12);
+        --accent: #38bdf8;
+        --accent-emerald: #10b981;
+        --text-main: #f3f4f6;
+        --text-muted: #9ca3af;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background-color: var(--bg-dark);
+        color: var(--text-main);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+        overflow: hidden;
+      }
+      .topbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 40px;
+        background: var(--bar-bg);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px;
+        z-index: 20;
+        user-select: none;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.02em;
+      }
+      .brand-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent), var(--accent-emerald));
+        box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+      }
+      .brand-tag {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: rgba(56, 189, 248, 0.14);
+        color: var(--accent);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+      }
+      .shortcuts {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        overflow-x: auto;
+      }
+      .pill {
+        font-size: 11px;
+        color: var(--text-muted);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 5px;
+        padding: 2px 7px;
+        white-space: nowrap;
+      }
+      .pill kbd {
+        color: var(--text-main);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 600;
+        font-size: 10.5px;
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn {
+        appearance: none;
+        border: 1px solid var(--border-subtle);
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--text-main);
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, transform 0.1s;
+        white-space: nowrap;
+      }
+      .btn:hover {
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.25);
+      }
+      .btn:active {
+        transform: translateY(1px);
+      }
+      .btn-primary {
+        background: rgba(56, 189, 248, 0.18);
+        border-color: rgba(56, 189, 248, 0.45);
+        color: #e0f2fe;
+      }
+      .btn-primary:hover {
+        background: rgba(56, 189, 248, 0.28);
+      }
+      .game {
+        position: absolute;
+        top: 40px;
+        left: 0;
+        margin: 0;
+        border: 0;
+        overflow: hidden;
+        display: block;
+        width: 100%;
+        height: calc(100% - 40px);
+        outline: none;
+      }
+      .loading-overlay {
+        position: fixed;
+        inset: 40px 0 0 0;
+        background: radial-gradient(circle at center, #111827 0%, #090d16 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        z-index: 30;
+        transition: opacity 0.25s ease;
+      }
+      .loading-overlay.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .spinner {
+        width: 34px;
+        height: 34px;
+        border: 3px solid rgba(56, 189, 248, 0.2);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .progress-track {
+        width: 240px;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .progress-bar {
+        height: 100%;
+        width: 15%;
+        background: linear-gradient(90deg, var(--accent), var(--accent-emerald));
+        transition: width 0.2s ease;
+      }
+      #status {
+        font-size: 12.5px;
+        color: var(--text-muted);
+      }
+      .toast {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        background: rgba(17, 24, 39, 0.95);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+        color: var(--text-main);
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        z-index: 40;
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity 0.2s, transform 0.2s;
+        pointer-events: none;
+      }
+      .toast.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      @media (max-width: 820px) {
+        .shortcuts { display: none; }
+      }
     </style>
   </head>
   <body>
-    <canvas class="game" id="canvas" width="640" height="480" oncontextmenu="event.preventDefault()"></canvas>
-    <script type='text/javascript'>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>Educore 3D Studio</span>
+        <span class="brand-tag">WASM / WebGL2</span>
+      </div>
+      <div class="shortcuts">
+        <span class="pill"><kbd>WASD</kbd>/<kbd>Arrows</kbd>: Move</span>
+        <span class="pill"><kbd>Q</kbd>/<kbd>E</kbd>: Cycle Variant</span>
+        <span class="pill"><kbd>Ctrl+S</kbd>: Save</span>
+        <span class="pill"><kbd>Ctrl+E</kbd>: Export glTF</span>
+        <span class="pill"><kbd>F3</kbd>: Debug</span>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" type="button" onclick="window.educoreDownloadFile('/assets/world.glb', 'world.glb', 'model/gltf-binary', true)">Download .glb</button>
+        <button class="btn" type="button" onclick="window.educoreDownloadFile('/assets/world.dat', 'world.dat', 'application/octet-stream', true)">Download .dat</button>
+        <button class="btn" type="button" onclick="window.educoreToggleFullscreen()">Fullscreen</button>
+      </div>
+    </header>
+
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner" id="spinner"></div>
+      <div class="progress-track">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div id="status">Downloading...</div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <canvas class="game" id="canvas" width="1280" height="720" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+
+    <script type="text/javascript">
       var statusElement = document.getElementById('status');
-      var progressElement = document.getElementById('progress');
+      var progressBar = document.getElementById('progress-bar');
       var spinnerElement = document.getElementById('spinner');
+      var overlayElement = document.getElementById('loading-overlay');
+      var toastElement = document.getElementById('toast');
+      var toastTimer = null;
+
+      window.educoreToast = function(msg) {
+        if (!toastElement) return;
+        toastElement.textContent = msg;
+        toastElement.classList.add('visible');
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(function() {
+          toastElement.classList.remove('visible');
+        }, 3200);
+      };
+
+      window.educoreDownloadFile = function(fsPath, downloadName, mimeType, fromButton) {
+        var fs = (typeof FS !== 'undefined') ? FS : (Module && Module.FS ? Module.FS : null);
+        if (!fs || !fs.readFile) {
+          window.educoreToast('Filesystem is not ready yet.');
+          return false;
+        }
+        var candidates = [fsPath, fsPath.replace(/^\//, ''), '/' + fsPath.replace(/^\//, '')];
+        var bytes = null;
+        for (var i = 0; i < candidates.length; i++) {
+          try {
+            bytes = fs.readFile(candidates[i]);
+            if (bytes && bytes.length > 0) break;
+          } catch (e) {}
+        }
+        if (!bytes || bytes.length === 0) {
+          if (downloadName.endsWith('.glb')) {
+            window.educoreToast('Press Ctrl+E or click the Export icon in the bottom toolbar first to generate world.glb.');
+          } else {
+            window.educoreToast('File not found in virtual filesystem: ' + fsPath);
+          }
+          if (fromButton && Module.canvas) Module.canvas.focus();
+          return false;
+        }
+        var blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = downloadName || 'download.bin';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+        window.educoreToast('Downloaded ' + downloadName + ' (' + (bytes.length / 1024).toFixed(1) + ' KB)');
+        if (fromButton && Module.canvas) Module.canvas.focus();
+        return true;
+      };
+
+      window.educoreToggleFullscreen = function() {
+        var elem = document.documentElement;
+        if (!document.fullscreenElement) {
+          if (elem.requestFullscreen) elem.requestFullscreen();
+        } else {
+          if (document.exitFullscreen) document.exitFullscreen();
+        }
+        if (Module && Module.canvas) Module.canvas.focus();
+      };
 
       var Module = {
-        postRun: [],
+        postRun: [function() {
+          if (overlayElement) overlayElement.classList.add('hidden');
+          if (Module.canvas) Module.canvas.focus();
+        }],
         print: (function() {
           return function(text) {
             text = Array.prototype.slice.call(arguments).join(' ');
@@ -37,25 +312,38 @@
         canvas: (function() {
           var canvas = document.getElementById('canvas');
           canvas.focus();
-
-          canvas.addEventListener("webglcontextlost", function(e) { alert('WebGL context lost. You will need to reload the page.'); e.preventDefault(); }, false);
-
+          canvas.addEventListener("webglcontextlost", function(e) {
+            alert('WebGL context lost. You will need to reload the page.');
+            e.preventDefault();
+          }, false);
           return canvas;
         })(),
         setStatus: function(text) {
-            console.log("status: " + text);
+          if (!text) {
+            if (overlayElement) overlayElement.classList.add('hidden');
+            return;
+          }
+          if (statusElement) statusElement.textContent = text;
+          var m = text.match(/\((\d+(?:\.\d+)?)\/(\d+)\)/);
+          if (m && progressBar) {
+            var pct = Math.min(100, Math.max(10, (parseFloat(m[1]) / parseFloat(m[2])) * 100));
+            progressBar.style.width = pct.toFixed(0) + '%';
+          } else if (text.indexOf('complete') !== -1 && progressBar) {
+            progressBar.style.width = '100%';
+            if (overlayElement) overlayElement.classList.add('hidden');
+          }
         },
         totalDependencies: 0,
         monitorRunDependencies: function(left) {
-            this.totalDependencies = Math.max(this.totalDependencies, left);
-          Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
         }
       };
 
       Module.setStatus('Downloading...');
       window.onerror = function() {
         Module.setStatus('Exception thrown, see JavaScript console');
-        spinnerElement.style.display = 'none';
+        if (spinnerElement) spinnerElement.style.display = 'none';
         Module.setStatus = function(text) {
           if (text) console.error('[post-exception status] ' + text);
         };

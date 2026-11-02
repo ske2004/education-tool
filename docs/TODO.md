@@ -18,11 +18,11 @@
     - [ ] Make it configurable
   - [ ] Rewrite the debug tree to use the new system
   - [ ] Add scrolling
-- [ ] glTF export follow-ups (see docs/gltf_export.md)
-  - [ ] Download the .glb in the web build
-  - [ ] Choose the export path
-  - [ ] Godot and Unity import helpers that read the node extras
-  - [ ] Option to keep interiors in the default scene
-  - [ ] Export the time-of-day light
-  - [ ] Option to merge each object's boxes into one mesh
-  - [ ] Export scripts and dialogue
+- [x] glTF export follow-ups (see docs/gltf_export.md)
+  - [x] Download the .glb in the web build
+  - [x] Choose the export path
+  - [x] Godot and Unity import helpers that read the node extras
+  - [x] Option to keep interiors in the default scene
+  - [x] Export the time-of-day light
+  - [x] Option to merge each object's boxes into one mesh
+  - [x] Export scripts and dialogue
