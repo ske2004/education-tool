@@ -1,11 +1,13 @@
 #pragma once
 
+#include "catedu/scene/world.hpp"
 #include "catedu/ui/user.hpp"
 #include <umka_api.h>
 
 struct UmkaBindingsData
 {
-    UiPass *user;
+    UiPass *user = nullptr;
+    World *world = nullptr;
 };
 
 struct UmkaModule

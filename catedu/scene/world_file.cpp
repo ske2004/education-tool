@@ -93,7 +93,7 @@ static void export_place(FILE *f, Place *place) {
         fprintf(f, "    {\"type\": \"%s\", \"x\": %f, \"y\": %f, \"floors\": %d", 
                 type_name, obj.x, obj.y, obj.floors);
                 
-        if (obj.type == Object::Type::prop) {
+        if (obj.type == Object::Type::prop || obj.id[0] != '\0') {
             std::string escaped_id;
             append_json_string(escaped_id, obj.id);
             fprintf(f, ", \"id\": %s", escaped_id.c_str());
@@ -200,7 +200,8 @@ bool WorldFile::save(const char *path, Dispatcher &dispatcher)
         sn.place_handle = gethandle(&mapper, node.place);
         sn.type = node.type;
 
-        if (node.type == ScriptNode::Type::yesno)
+        if (node.type == ScriptNode::Type::yesno ||
+            node.type == ScriptNode::Type::check_item)
         {
             strncpy(sn.text, node.yesno.question, sizeof(sn.text) - 1);
             sn.yes_handle = gethandle(&node_mapper, node.yesno.yes);
@@ -470,7 +471,8 @@ Dispatcher WorldFile::load(const char *path)
             node->type = ScriptNode::Type::say;
         }
 
-        if (node->type == ScriptNode::Type::yesno)
+        if (node->type == ScriptNode::Type::yesno ||
+            node->type == ScriptNode::Type::check_item)
         {
             strncpy(node->yesno.question, saved_nodes[i].text, sizeof(node->yesno.question) - 1);
         }
@@ -494,7 +496,8 @@ Dispatcher WorldFile::load(const char *path)
         node.next = (ScriptNode *)getptr(&node_mapper, saved_nodes[idx].next_handle);
         node.place = (Place *)getptr(&mapper, saved_nodes[idx].place_handle);
 
-        if (node.type == ScriptNode::Type::yesno)
+        if (node.type == ScriptNode::Type::yesno ||
+            node.type == ScriptNode::Type::check_item)
         {
             node.yesno.yes = (ScriptNode *)getptr(&node_mapper, saved_nodes[idx].yes_handle);
             node.yesno.no = (ScriptNode *)getptr(&node_mapper, saved_nodes[idx].no_handle);

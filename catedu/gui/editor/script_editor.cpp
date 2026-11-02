@@ -263,6 +263,29 @@ ScriptCardAction show_script_card(ScriptCardDragNDrop &dnd, ScriptNode *node,
             dnd, node, user, {"Give item...", 0xCC660099 | colormask},
             [&] { input(user, "Item", node->say, 256); });
         break;
+    case ScriptNode::Type::check_item:
+        show_generic_script_card(
+            dnd, node, user, {"Has Item?", 0xCC660099 | colormask}, [&] {
+                input(user, "Item Name", node->yesno.question, 256);
+                AutoLayoutElement el = {};
+                el.layout.type = AutoLayout::row;
+
+                user.begin_generic(el, {}, {});
+                show_script_card_btn(
+                    user, {"Yes", 0xCCCC0099 | colormask, true}, [&] {},
+                    [&] {
+                        action.parent = node;
+                        action.yes = true;
+                    });
+                show_script_card_btn(
+                    user, {"No", 0xCCCC0099 | colormask, true}, [&] {},
+                    [&] {
+                        action.parent = node;
+                        action.yes = false;
+                    });
+                user.end_generic();
+            });
+        break;
     default:;
     }
 
@@ -374,6 +397,23 @@ void ScriptEditor::show(UiPass &user, World &world)
             dnd.node->parent = this->current;
         }
 
+        if (dnd.node->type == ScriptNode::Type::yesno ||
+            dnd.node->type == ScriptNode::Type::check_item)
+        {
+            if (!dnd.node->yesno.yes)
+            {
+                dnd.node->yesno.yes =
+                    script->append_node(ScriptNode::Type::event, dnd.node);
+                dnd.node->yesno.yes->event = ScriptNode::EventType::yes;
+            }
+            if (!dnd.node->yesno.no)
+            {
+                dnd.node->yesno.no =
+                    script->append_node(ScriptNode::Type::event, dnd.node);
+                dnd.node->yesno.no->event = ScriptNode::EventType::no;
+            }
+        }
+
         // insert into the new place
         dnd.node->next = dnd.insert_after->next;
         dnd.insert_after->next = dnd.node;
@@ -392,6 +432,17 @@ void ScriptEditor::show(UiPass &user, World &world)
         dnd.dragging = nullptr;
         dnd.node = nullptr;
     }
+
+    show_script_card_btn(
+        user, {"if item", 0xCC660099}, [&] {},
+        [&] {
+            ScriptNode *n =
+                script->append_node(ScriptNode::Type::check_item, this->current);
+            n->yesno.yes = script->append_node(ScriptNode::Type::event, n);
+            n->yesno.yes->event = ScriptNode::EventType::yes;
+            n->yesno.no = script->append_node(ScriptNode::Type::event, n);
+            n->yesno.no->event = ScriptNode::EventType::no;
+        });
 
     if (action.parent)
     {

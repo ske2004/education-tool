@@ -8,6 +8,7 @@
 #include "catedu/ui/rendering/make_brush.hpp"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 #include <algorithm>
 
@@ -189,7 +190,7 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
     this->world.time_of_day += (1.0f / (5.0f * 60.0f));
     if (this->world.time_of_day >= 24.0f) this->world.time_of_day -= 24.0f;
 
-    // HUD overlay (time clock and inventory)
+    // HUD overlay (time clock, location, controls, context hint, and inventory)
     {
         AutoLayoutElement hud = {};
         hud.position = AutoLayoutPosition::absolute;
@@ -216,6 +217,77 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
         int minutes = ((int)floorf((this->world.time_of_day - floorf(this->world.time_of_day)) * 60.0f) % 60 + 60) % 60;
         snprintf(time_str, sizeof(time_str), "Time: %02d:%02d", hours, minutes);
         label(user, time_str, {1.2f, 1.2f}, UiMakeBrush::make_solid(0xFFFFFFFF));
+
+        const char *loc_str = (this->world.current && this->world.current->interior)
+                                  ? "Location: Interior"
+                                  : "Location: Greenville Outdoors";
+        label(user, loc_str, {1.0f, 1.0f}, UiMakeBrush::make_solid(0xAADDFFFF));
+
+        label(user, "Controls: WASD/Arrows Move | Space Jump | E/Enter Interact",
+              {0.9f, 0.9f}, UiMakeBrush::make_solid(0xAAAAAAFF));
+
+        if (this->player != NULL_ID && this->world.current)
+        {
+            PhysicsBody &pbody = physics.bodies.get_assert(this->player);
+            char context_hint[128] = "";
+            bool near_door = false;
+            for (auto [bid, b] : iter(physics.bodies))
+            {
+                if (bid != this->player && b.userdata && rect_vs_rect(pbody.area, b.area))
+                {
+                    near_door = true;
+                    break;
+                }
+            }
+
+            if (near_door)
+            {
+                snprintf(context_hint, sizeof(context_hint), "[E / Enter] Enter/Exit Door");
+            }
+            else
+            {
+                Object *closest_interactable = nullptr;
+                float min_dist = 5.0f;
+                for (auto &obj : iter(this->world.current->objects))
+                {
+                    if (obj.type == Object::Type::building ||
+                        obj.type == Object::Type::tree ||
+                        obj.type == Object::Type::npc)
+                    {
+                        float dist = vector2_length({obj.x - pbody.area.pos.x, obj.y - pbody.area.pos.y});
+                        if (dist < min_dist)
+                        {
+                            min_dist = dist;
+                            closest_interactable = &obj;
+                        }
+                    }
+                }
+
+                if (closest_interactable)
+                {
+                    if (closest_interactable->type == Object::Type::npc)
+                    {
+                        const char *npc_name = closest_interactable->id[0] != '\0'
+                                                   ? closest_interactable->id
+                                                   : "Villager";
+                        snprintf(context_hint, sizeof(context_hint), "[E / Enter] Talk to %s", npc_name);
+                    }
+                    else if (closest_interactable->type == Object::Type::tree)
+                    {
+                        snprintf(context_hint, sizeof(context_hint), "[E / Enter] Harvest Wood");
+                    }
+                    else if (closest_interactable->type == Object::Type::building)
+                    {
+                        snprintf(context_hint, sizeof(context_hint), "[E / Enter] Deliver Wood (+5 Coins)");
+                    }
+                }
+            }
+
+            if (context_hint[0] != '\0')
+            {
+                label(user, context_hint, {1.05f, 1.05f}, UiMakeBrush::make_solid(0x88FF88FF));
+            }
+        }
 
         for (const auto &item : this->world.player_inventory.items)
         {
@@ -274,12 +346,25 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
             }
             this->current = this->current->next;
             break;
+        case ScriptNode::Type::check_item:
+            if (this->current->yesno.question[0] != '\0' &&
+                this->world.player_inventory.has_item(
+                    this->current->yesno.question, 1))
+            {
+                this->current = this->current->yesno.yes;
+            }
+            else
+            {
+                this->current = this->current->yesno.no;
+            }
+            break;
         default:
             assert(false);
         }
 
         while (!this->current && parent && parent->parent &&
-               parent->parent->type == ScriptNode::Type::yesno)
+               (parent->parent->type == ScriptNode::Type::yesno ||
+                parent->parent->type == ScriptNode::Type::check_item))
         {
             this->current = parent->parent->next;
             parent = parent->parent->parent;
@@ -296,15 +381,15 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
     bool enter = false;
     Vector2 movement = {0, 0};
 
-    if (input.k[SAPP_KEYCODE_UP].held)
+    if (input.k[SAPP_KEYCODE_UP].held || input.k[SAPP_KEYCODE_W].held)
         movement.y += 1;
-    if (input.k[SAPP_KEYCODE_DOWN].held)
+    if (input.k[SAPP_KEYCODE_DOWN].held || input.k[SAPP_KEYCODE_S].held)
         movement.y -= 1;
-    if (input.k[SAPP_KEYCODE_LEFT].held)
+    if (input.k[SAPP_KEYCODE_LEFT].held || input.k[SAPP_KEYCODE_A].held)
         movement.x -= 1;
-    if (input.k[SAPP_KEYCODE_RIGHT].held)
+    if (input.k[SAPP_KEYCODE_RIGHT].held || input.k[SAPP_KEYCODE_D].held)
         movement.x += 1;
-    if (input.k[SAPP_KEYCODE_ENTER].pressed)
+    if (input.k[SAPP_KEYCODE_ENTER].pressed || input.k[SAPP_KEYCODE_E].pressed)
         enter = true;
         
     if (input.k[SAPP_KEYCODE_SPACE].pressed && player_vz == 0.0f) {
@@ -339,7 +424,14 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
             Rect area = {obj.x, obj.y, 1.0f, 1.0f};
             if (rect_vs_rect(player.area, area))
             {
-                world.player_inventory.add_item("Found Item", "Picked up from the ground.", 1);
+                if (obj.id[0] != '\0')
+                {
+                    world.player_inventory.add_item(obj.id, "Collected quest item.", 1);
+                }
+                else
+                {
+                    world.player_inventory.add_item("Found Item", "Picked up from the ground.", 1);
+                }
                 items_to_remove.push_back(&obj);
             }
         }
@@ -485,11 +577,31 @@ void Playtest::update(UiPass &user, Input &input, EditorCamera &camera,
                 this->interaction_node = {};
                 this->interaction_node.type = ScriptNode::Type::say;
                 
-                // Random NPC dialogues
-                int r = rand() % 3;
-                if (r == 0) strcpy(this->interaction_node.say, "Villager: Hello! Nice weather we're having.");
-                else if (r == 1) strcpy(this->interaction_node.say, "Villager: I love this town. It's so peaceful.");
-                else strcpy(this->interaction_node.say, "Villager: Have you seen the mayor? He looks busy.");
+                const char *id = closest_interactable->id;
+                if (id[0] != '\0') {
+                    if (strcmp(id, "Mayor") == 0) {
+                        snprintf(this->interaction_node.say, sizeof(this->interaction_node.say),
+                                 "Mayor: Welcome to the Greenville Science Fair! Check Town Hall and the Workshop.");
+                    } else if (strcmp(id, "Engineer") == 0) {
+                        snprintf(this->interaction_node.say, sizeof(this->interaction_node.say),
+                                 "Engineer: Gears trade speed for torque! A 2:1 gear ratio doubles your lifting force.");
+                    } else if (strcmp(id, "Botanist") == 0) {
+                        snprintf(this->interaction_node.say, sizeof(this->interaction_node.say),
+                                 "Botanist: Riparian trees filter runoff and keep our river ecosystem healthy!");
+                    } else if (strcmp(id, "Librarian") == 0) {
+                        snprintf(this->interaction_node.say, sizeof(this->interaction_node.say),
+                                 "Librarian: Our town sundial was calibrated in 1892 using solar noon!");
+                    } else {
+                        snprintf(this->interaction_node.say, sizeof(this->interaction_node.say),
+                                 "%s: Hello traveler! Explore the buildings to learn more.", id);
+                    }
+                } else {
+                    // Random NPC dialogues
+                    int r = rand() % 3;
+                    if (r == 0) strcpy(this->interaction_node.say, "Villager: Hello! Nice weather we're having.");
+                    else if (r == 1) strcpy(this->interaction_node.say, "Villager: I love this town. It's so peaceful.");
+                    else strcpy(this->interaction_node.say, "Villager: Have you seen the mayor? He looks busy.");
+                }
                 
                 this->current = &this->interaction_node;
             }

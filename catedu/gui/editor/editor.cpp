@@ -31,6 +31,9 @@
 #include <catedu/genobj/wall.hpp>
 #include <cstdio>
 #include <umka_api.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 bool icon_button(UiPass &user, const char *name, const char *icon,
                  Vector4 color = {1.0, 1.0, 1.0, 1.0}, float scale = 1);
@@ -59,25 +62,46 @@ bool rect_side_is_horizontal(RectSide &side)
     return side == RectSide::Bottom || side == RectSide::Top;
 }
 
-// Steps `id` to the neighbouring entry in PROP_IDS, wrapping around. An ID
+static const char *const NPC_PRESET_IDS[] = {
+    "Mayor", "Engineer", "Botanist", "Librarian", "Baker"
+};
+static constexpr size_t NPC_PRESET_COUNT =
+    sizeof(NPC_PRESET_IDS) / sizeof(NPC_PRESET_IDS[0]);
+
+static const char *const ITEM_PRESET_IDS[] = {
+    "Solar Lens", "Ancient Gear", "Water Sample", "Town Charter", "Crystal"
+};
+static constexpr size_t ITEM_PRESET_COUNT =
+    sizeof(ITEM_PRESET_IDS) / sizeof(ITEM_PRESET_IDS[0]);
+
+static char s_npc_id[32] = "Mayor";
+static char s_item_id[32] = "Solar Lens";
+
+// Steps `id` to the neighbouring entry in `presets`, wrapping around. An ID
 // that isn't in the list steps to the first or last entry.
-static void cycle_prop_id(char *id, size_t size, int step)
+static void cycle_preset_id(char *id, size_t size, const char *const *presets,
+                            size_t count, int step)
 {
     int current = -1;
-    for (size_t i = 0; i < PROP_ID_COUNT; i++)
+    for (size_t i = 0; i < count; i++)
     {
-        if (strcmp(id, PROP_IDS[i]) == 0)
+        if (strcmp(id, presets[i]) == 0)
         {
             current = (int)i;
         }
     }
 
-    int count = (int)PROP_ID_COUNT;
-    int next = current < 0 ? (step > 0 ? 0 : count - 1)
-                           : ((current + step) % count + count) % count;
+    int n = (int)count;
+    int next = current < 0 ? (step > 0 ? 0 : n - 1)
+                           : ((current + step) % n + n) % n;
 
-    strncpy(id, PROP_IDS[next], size - 1);
+    strncpy(id, presets[next], size - 1);
     id[size - 1] = 0;
+}
+
+static void cycle_prop_id(char *id, size_t size, int step)
+{
+    cycle_preset_id(id, size, PROP_IDS, PROP_ID_COUNT, step);
 }
 
 void begin_toolbar(UiPass &user, const char *name, float align_y, float align_x)
@@ -455,6 +479,18 @@ static void export_world(GuiEditor &editor, ResourceSpec &resources)
     bool ok = export_world_gltf(GLTF_EXPORT_PATH, editor.dispatcher.world,
                                 get_genres(resources));
     editor.export_status = ok ? ExportStatus::succeeded : ExportStatus::failed;
+#ifdef __EMSCRIPTEN__
+    if (ok)
+    {
+        EM_ASM({
+            if (window.educoreDownloadFile)
+            {
+                window.educoreDownloadFile('/assets/world.glb', 'world.glb',
+                                           'model/gltf-binary');
+            }
+        });
+    }
+#endif
 }
 
 void show_popups(UiPass &user, GuiEditor &editor, bool &return_back)
@@ -603,6 +639,65 @@ void show_editor_controls(UiPass &user, GuiEditor &editor,
     end_toolbar(user);
 }
 
+static void show_subeditor_preset_toolbar(UiPass &user, SubEditor &sub_editor)
+{
+    if (sub_editor.type == SubEditor::Type::prop)
+    {
+        begin_toolbar(user, "Prop Settings", 1.0, 0.5);
+        if (button(user, "<"))
+        {
+            cycle_prop_id(sub_editor.edit_basic.prop_id,
+                          sizeof(sub_editor.edit_basic.prop_id), -1);
+        }
+        if (button(user, ">"))
+        {
+            cycle_prop_id(sub_editor.edit_basic.prop_id,
+                          sizeof(sub_editor.edit_basic.prop_id), 1);
+        }
+        label(user, "Prop [Q/E]:", {1.2, 1.2},
+              UiMakeBrush::make_solid(0xFFFFFFFF));
+        input(user, "prop_id_input", sub_editor.edit_basic.prop_id,
+              sizeof(sub_editor.edit_basic.prop_id));
+        end_toolbar(user);
+    }
+    else if (sub_editor.type == SubEditor::Type::npc)
+    {
+        begin_toolbar(user, "NPC Settings", 1.0, 0.5);
+        if (button(user, "<"))
+        {
+            cycle_preset_id(s_npc_id, sizeof(s_npc_id), NPC_PRESET_IDS,
+                            NPC_PRESET_COUNT, -1);
+        }
+        if (button(user, ">"))
+        {
+            cycle_preset_id(s_npc_id, sizeof(s_npc_id), NPC_PRESET_IDS,
+                            NPC_PRESET_COUNT, 1);
+        }
+        label(user, "NPC [Q/E]:", {1.2, 1.2},
+              UiMakeBrush::make_solid(0xFFFFFFFF));
+        input(user, "npc_id_input", s_npc_id, sizeof(s_npc_id));
+        end_toolbar(user);
+    }
+    else if (sub_editor.type == SubEditor::Type::item)
+    {
+        begin_toolbar(user, "Item Settings", 1.0, 0.5);
+        if (button(user, "<"))
+        {
+            cycle_preset_id(s_item_id, sizeof(s_item_id), ITEM_PRESET_IDS,
+                            ITEM_PRESET_COUNT, -1);
+        }
+        if (button(user, ">"))
+        {
+            cycle_preset_id(s_item_id, sizeof(s_item_id), ITEM_PRESET_IDS,
+                            ITEM_PRESET_COUNT, 1);
+        }
+        label(user, "Item [Q/E]:", {1.2, 1.2},
+              UiMakeBrush::make_solid(0xFFFFFFFF));
+        input(user, "item_id_input", s_item_id, sizeof(s_item_id));
+        end_toolbar(user);
+    }
+}
+
 void handle_shortcuts(GuiEditor &editor, Input &input, ResourceSpec &resources)
 {
     if (input.shortcut(MOD_CTRL, SAPP_KEYCODE_S))
@@ -624,6 +719,33 @@ void handle_shortcuts(GuiEditor &editor, Input &input, ResourceSpec &resources)
     if (input.shortcut(MOD_CTRL, SAPP_KEYCODE_Y))
     {
         editor.dispatcher.redo();
+    }
+
+    if (!editor.playtesting && editor.sub_mode == SubMode::build &&
+        editor.ui_state &&
+        editor.ui_state->interaction_table.focused == NULL_ID)
+    {
+        int cycle_step = (input.k[SAPP_KEYCODE_E].pressed ? 1 : 0) -
+                         (input.k[SAPP_KEYCODE_Q].pressed ? 1 : 0);
+        if (cycle_step != 0)
+        {
+            if (editor.sub_editor.type == SubEditor::Type::prop)
+            {
+                cycle_prop_id(editor.sub_editor.edit_basic.prop_id,
+                              sizeof(editor.sub_editor.edit_basic.prop_id),
+                              cycle_step);
+            }
+            else if (editor.sub_editor.type == SubEditor::Type::npc)
+            {
+                cycle_preset_id(s_npc_id, sizeof(s_npc_id), NPC_PRESET_IDS,
+                                NPC_PRESET_COUNT, cycle_step);
+            }
+            else if (editor.sub_editor.type == SubEditor::Type::item)
+            {
+                cycle_preset_id(s_item_id, sizeof(s_item_id), ITEM_PRESET_IDS,
+                                ITEM_PRESET_COUNT, cycle_step);
+            }
+        }
     }
 }
 
@@ -711,6 +833,10 @@ void show_editor_ui(GuiEditor &editor, UiPass &user, ResourceSpec &resources,
     if (!editor.playtesting)
     {
         show_control_panel(user, editor, resources, renderer);
+        if (editor.sub_mode == SubMode::build)
+        {
+            show_subeditor_preset_toolbar(user, editor.sub_editor);
+        }
     }
 
     show_editor_controls(user, editor, resources, return_back);
@@ -810,12 +936,44 @@ void SubEditor::update(Dispatcher &disp, Input &input, Camera &camera,
     case Type::tree:
         edit_basic.update(disp, input, camera, viewport, Object::Type::tree);
         break;
-    case Type::item:
+    case Type::item: {
+        EditOp *prev_op = disp.current;
         edit_basic.update(disp, input, camera, viewport, Object::Type::item);
+        if (disp.current != prev_op && disp.current &&
+            disp.current->type == EditOp::Type::place)
+        {
+            strncpy(disp.current->object.id, s_item_id,
+                    sizeof(disp.current->object.id) - 1);
+            disp.current->object.id[sizeof(disp.current->object.id) - 1] = 0;
+            if (Object *placed = disp.world.current->get_object_at(
+                    (int)disp.current->object.x, (int)disp.current->object.y,
+                    Object::Type::item))
+            {
+                strncpy(placed->id, s_item_id, sizeof(placed->id) - 1);
+                placed->id[sizeof(placed->id) - 1] = 0;
+            }
+        }
         break;
-    case Type::npc:
+    }
+    case Type::npc: {
+        EditOp *prev_op = disp.current;
         edit_basic.update(disp, input, camera, viewport, Object::Type::npc);
+        if (disp.current != prev_op && disp.current &&
+            disp.current->type == EditOp::Type::place)
+        {
+            strncpy(disp.current->object.id, s_npc_id,
+                    sizeof(disp.current->object.id) - 1);
+            disp.current->object.id[sizeof(disp.current->object.id) - 1] = 0;
+            if (Object *placed = disp.world.current->get_object_at(
+                    (int)disp.current->object.x, (int)disp.current->object.y,
+                    Object::Type::npc))
+            {
+                strncpy(placed->id, s_npc_id, sizeof(placed->id) - 1);
+                placed->id[sizeof(placed->id) - 1] = 0;
+            }
+        }
         break;
+    }
     case Type::animal:
         edit_basic.update(disp, input, camera, viewport, Object::Type::animal);
         break;
@@ -840,6 +998,7 @@ void SubEditor::update(Dispatcher &disp, Input &input, Camera &camera,
 void SubEditor::render(UiPass &user, Renderer &renderer, Dispatcher &disp,
                        GenResources &gen_resources)
 {
+    (void)user;
     switch (type)
     {
     case Type::deleter:
@@ -877,18 +1036,6 @@ void SubEditor::render(UiPass &user, Renderer &renderer, Dispatcher &disp,
         break;
     case Type::prop:
         edit_basic.render(renderer, gen_resources, Object::Type::prop);
-        begin_toolbar(user, "Prop Settings", 1.0, 1.0);
-        if (button(user, "<"))
-        {
-            cycle_prop_id(edit_basic.prop_id, sizeof(edit_basic.prop_id), -1);
-        }
-        if (button(user, ">"))
-        {
-            cycle_prop_id(edit_basic.prop_id, sizeof(edit_basic.prop_id), 1);
-        }
-        label(user, "Prop ID:");
-        input(user, "prop_id_input", edit_basic.prop_id, sizeof(edit_basic.prop_id));
-        end_toolbar(user);
         break;
     case Type::castle:
         edit_building.render(renderer, gen_resources, Object::Type::castle);
