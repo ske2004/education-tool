@@ -32,8 +32,12 @@ struct Agent
 {
     std::string name;
     Vector2i pos;
+    Place *place = nullptr;
+    int building_x = 0;
+    int building_y = 0;
+    std::vector<std::string> inventory;
     std::vector<Vector2i> path;
-    size_t next;
+    size_t next = 0;
 
     bool moving() const
     {
@@ -48,6 +52,7 @@ struct SpeechEvent
     std::string name;
     std::string text;
     Vector2i pos;
+    Place *place = nullptr;
 };
 
 struct AgentServer
@@ -60,6 +65,16 @@ struct AgentServer
     FILE *out;
     bool quit;
 };
+
+static Place *outdoors(AgentServer &server)
+{
+    return server.world.world.first;
+}
+
+static const Place *outdoors(const AgentServer &server)
+{
+    return server.world.world.first;
+}
 
 static void reply(AgentServer &server, const std::string &json)
 {
@@ -80,10 +95,22 @@ static void append_agent(std::string &json, const AgentServer &server,
                          size_t id)
 {
     const Agent &agent = server.agents[id];
+    bool inside = agent.place != nullptr && agent.place != outdoors(server);
     appendf(json, "{\"agent\":%zu,\"name\":", id);
     append_json_string(json, agent.name.c_str());
-    appendf(json, ",\"x\":%d,\"y\":%d,\"moving\":%s}", agent.pos.x, agent.pos.y,
-            agent.moving() ? "true" : "false");
+    appendf(json,
+            ",\"x\":%d,\"y\":%d,\"moving\":%s,\"inside\":%s,\"inventory\":[",
+            agent.pos.x, agent.pos.y, agent.moving() ? "true" : "false",
+            inside ? "true" : "false");
+    for (size_t i = 0; i < agent.inventory.size(); i++)
+    {
+        if (i)
+        {
+            json += ',';
+        }
+        append_json_string(json, agent.inventory[i].c_str());
+    }
+    json += "]}";
 }
 
 static void append_agents(std::string &json, const AgentServer &server)
@@ -106,7 +133,7 @@ static void append_object(std::string &json, const Object &object)
     append_json_string(json, object_type_name(object.type));
     appendf(json, ",\"x\":%g,\"y\":%g,\"floors\":%d", object.x, object.y,
             object.floors);
-    if (object.type == Object::Type::prop)
+    if (object.id[0] != '\0' || object.type == Object::Type::prop)
     {
         json += ",\"id\":";
         append_json_string(json, object.id);
@@ -140,9 +167,45 @@ static bool command_tile(AgentServer &server, const char *line, Vector2i *tile)
     return true;
 }
 
-static Place *outdoors(AgentServer &server)
+static float tile_distance(Vector2i a, float x, float y)
 {
-    return server.world.world.first;
+    return hypotf(x - a.x, y - a.y);
+}
+
+static void ensure_interior(Object *object, World &world)
+{
+    if (object->place != nullptr)
+    {
+        return;
+    }
+
+    object->place = world.places.alloc();
+    *object->place = Place::create();
+    object->place->interior = true;
+
+    Place *place = object->place;
+    int floors = object->floors > 0 ? object->floors : 1;
+    int dim = 6 + 2 * floors;
+    if (dim > 20)
+    {
+        dim = 20;
+    }
+
+    int left_x = -(dim / 2 - 1);
+    int right_x = dim / 2;
+    int south_y = -12;
+    int north_y = south_y + dim - 1;
+
+    for (int x = left_x; x <= right_x; x++)
+    {
+        place->place_object({Object::Type::wall, 0, (float)x, (float)south_y});
+        place->place_object({Object::Type::wall, 0, (float)x, (float)north_y});
+    }
+    for (int y = south_y + 1; y <= north_y - 1; y++)
+    {
+        place->place_object({Object::Type::wall, 0, (float)left_x, (float)y});
+        place->place_object({Object::Type::wall, 0, (float)right_x, (float)y});
+    }
 }
 
 static void handle_place(AgentServer &server, const char *line)
@@ -171,16 +234,10 @@ static void handle_place(AgentServer &server, const char *line)
 
     object.x = (float)x;
     object.y = (float)y;
-    if (object.type == Object::Type::building ||
-        object.type == Object::Type::castle)
-    {
-        object.floors = (int)floors;
-    }
-    else
-    {
-        object.floors = (int)floors;
-    }
-    if (object.type == Object::Type::prop)
+    object.floors = (int)floors;
+    if (object.type == Object::Type::prop ||
+        object.type == Object::Type::item ||
+        object.type == Object::Type::npc)
     {
         json_match_str(line, "id", object.id, sizeof object.id);
     }
@@ -229,6 +286,9 @@ static void handle_spawn(AgentServer &server, const char *line)
     }
 
     agent.name = name;
+    agent.place = outdoors(server);
+    agent.building_x = agent.pos.x;
+    agent.building_y = agent.pos.y;
     server.agents.push_back(agent);
 
     std::string json = "{\"ok\":true,";
@@ -246,7 +306,8 @@ static void handle_go(AgentServer &server, const char *line)
     {
         return;
     }
-    if (!is_walkable(outdoors(server), target))
+    Place *place = agent->place ? agent->place : outdoors(server);
+    if (!is_walkable(place, target))
     {
         reply_error(server, "the tile isn't walkable");
         return;
@@ -255,8 +316,7 @@ static void handle_go(AgentServer &server, const char *line)
     std::vector<Vector2i> path;
     if (target != agent->pos)
     {
-        path = find_path(outdoors(server), agent->pos, target,
-                         AGENT_PATH_ITERATIONS);
+        path = find_path(place, agent->pos, target, AGENT_PATH_ITERATIONS);
         if (path.empty())
         {
             reply_error(server, "the tile can't be reached");
@@ -282,6 +342,176 @@ static void handle_stop(AgentServer &server, const char *line)
     }
 }
 
+static void handle_enter(AgentServer &server, const char *line)
+{
+    Agent *agent = command_agent(server, line);
+    if (!agent)
+    {
+        return;
+    }
+    if (agent->place && agent->place != outdoors(server))
+    {
+        reply_error(server, "already inside a building");
+        return;
+    }
+
+    Object *nearest = nullptr;
+    float best_dist = 1e9f;
+    for (auto &object : iter(outdoors(server)->objects))
+    {
+        if (object.type != Object::Type::building &&
+            object.type != Object::Type::castle)
+        {
+            continue;
+        }
+        float d_center = tile_distance(agent->pos, object.x, object.y);
+        float d_entrance = tile_distance(agent->pos, object.x, object.y - 5.0f);
+        float d = std::min(d_center, d_entrance);
+        if (d <= 6.0f && d < best_dist)
+        {
+            best_dist = d;
+            nearest = &object;
+        }
+    }
+
+    if (!nearest)
+    {
+        reply_error(server, "no building nearby");
+        return;
+    }
+
+    ensure_interior(nearest, server.world.world);
+    agent->building_x = agent->pos.x;
+    agent->building_y = agent->pos.y;
+    agent->place = nearest->place;
+    agent->pos = {0, -10};
+    agent->path.clear();
+    agent->next = 0;
+
+    std::string json;
+    appendf(json,
+            "{\"ok\":true,\"inside\":true,\"building\":{\"x\":%g,\"y\":%g}}",
+            nearest->x, nearest->y);
+    reply(server, json);
+}
+
+static void handle_leave(AgentServer &server, const char *line)
+{
+    Agent *agent = command_agent(server, line);
+    if (!agent)
+    {
+        return;
+    }
+    if (!agent->place || agent->place == outdoors(server))
+    {
+        reply_error(server, "not inside a building");
+        return;
+    }
+
+    agent->place = outdoors(server);
+    agent->pos = {agent->building_x, agent->building_y};
+    agent->path.clear();
+    agent->next = 0;
+
+    std::string json;
+    appendf(json, "{\"ok\":true,\"inside\":false,\"x\":%d,\"y\":%d}",
+            agent->pos.x, agent->pos.y);
+    reply(server, json);
+}
+
+static void handle_pickup(AgentServer &server, const char *line)
+{
+    Agent *agent = command_agent(server, line);
+    if (!agent)
+    {
+        return;
+    }
+
+    Place *place = agent->place ? agent->place : outdoors(server);
+    Object *nearest = nullptr;
+    float best_dist = 1e9f;
+    for (auto &object : iter(place->objects))
+    {
+        if (object.type != Object::Type::item)
+        {
+            continue;
+        }
+        float d = tile_distance(agent->pos, object.x, object.y);
+        if (d <= 2.5f && d < best_dist)
+        {
+            best_dist = d;
+            nearest = &object;
+        }
+    }
+
+    if (!nearest)
+    {
+        reply_error(server, "no item nearby");
+        return;
+    }
+
+    std::string item_name = nearest->id[0] ? nearest->id : "item";
+    agent->inventory.push_back(item_name);
+
+    int ix = (int)ceilf(nearest->x);
+    int iy = (int)ceilf(nearest->y);
+    if (place->get_object_at(ix, iy, Object::Type::road) != nullptr)
+    {
+        place->objects.free(nearest);
+    }
+    else
+    {
+        place->remove_object(ix, iy, Object::Type::item);
+    }
+
+    std::string json = "{\"ok\":true,\"item\":";
+    append_json_string(json, item_name.c_str());
+    json += '}';
+    reply(server, json);
+}
+
+static void handle_drop(AgentServer &server, const char *line)
+{
+    Agent *agent = command_agent(server, line);
+    if (!agent)
+    {
+        return;
+    }
+
+    char item_name[32] = {};
+    if (!json_match_str(line, "item", item_name, sizeof item_name) ||
+        !item_name[0])
+    {
+        reply_error(server, "item not in inventory");
+        return;
+    }
+
+    auto it =
+        std::find(agent->inventory.begin(), agent->inventory.end(), item_name);
+    if (it == agent->inventory.end())
+    {
+        reply_error(server, "item not in inventory");
+        return;
+    }
+    agent->inventory.erase(it);
+
+    Place *place = agent->place ? agent->place : outdoors(server);
+    Object obj = {};
+    obj.type = Object::Type::item;
+    obj.floors = 1;
+    obj.x = (float)agent->pos.x;
+    obj.y = (float)agent->pos.y;
+    strncpy(obj.id, item_name, sizeof(obj.id) - 1);
+
+    if (!place->place_object(obj))
+    {
+        Object *placed = place->objects.alloc();
+        *placed = obj;
+    }
+
+    reply(server, "{\"ok\":true}");
+}
+
 static void handle_say(AgentServer &server, const char *line)
 {
     Agent *agent = command_agent(server, line);
@@ -303,6 +533,7 @@ static void handle_say(AgentServer &server, const char *line)
     ev.name = agent->name;
     ev.text = text;
     ev.pos = agent->pos;
+    ev.place = agent->place ? agent->place : outdoors(server);
 
     server.speech_events.push_back(ev);
     if (server.speech_events.size() > 500)
@@ -347,6 +578,8 @@ static void handle_step(AgentServer &server, const char *line)
     for (int i = 0; i < (int)ticks; i++)
     {
         server.tick++;
+        server.world.world.time_of_day =
+            fmodf(server.world.world.time_of_day + (1.0f / 60.0f), 24.0f);
         for (Agent &agent : server.agents)
         {
             if (agent.moving())
@@ -357,15 +590,11 @@ static void handle_step(AgentServer &server, const char *line)
     }
 
     std::string json;
-    appendf(json, "{\"ok\":true,\"tick\":%d,", server.tick);
+    appendf(json, "{\"ok\":true,\"tick\":%d,\"time_of_day\":%g,", server.tick,
+            server.world.world.time_of_day);
     append_agents(json, server);
     json += '}';
     reply(server, json);
-}
-
-static float tile_distance(Vector2i a, float x, float y)
-{
-    return hypotf(x - a.x, y - a.y);
 }
 
 static void handle_observe(AgentServer &server, const char *line)
@@ -379,13 +608,15 @@ static void handle_observe(AgentServer &server, const char *line)
     double radius = 10;
     json_match_double(line, "radius", &radius);
 
+    Place *place = agent->place ? agent->place : outdoors(server);
+
     struct Seen
     {
         Object *object;
         float distance;
     };
     std::vector<Seen> seen;
-    for (auto &object : iter(outdoors(server)->objects))
+    for (auto &object : iter(place->objects))
     {
         float distance = tile_distance(agent->pos, object.x, object.y);
         if (distance <= radius)
@@ -402,7 +633,8 @@ static void handle_observe(AgentServer &server, const char *line)
     }
 
     std::string json;
-    appendf(json, "{\"ok\":true,\"tick\":%d,\"self\":", server.tick);
+    appendf(json, "{\"ok\":true,\"tick\":%d,\"time_of_day\":%g,\"self\":",
+            server.tick, server.world.world.time_of_day);
     append_agent(json, server, agent - server.agents.data());
 
     json += ",\"objects\":[";
@@ -418,8 +650,9 @@ static void handle_observe(AgentServer &server, const char *line)
     for (size_t i = 0; i < server.agents.size(); i++)
     {
         const Agent &other = server.agents[i];
+        Place *other_place = other.place ? other.place : outdoors(server);
         float distance = tile_distance(agent->pos, other.pos.x, other.pos.y);
-        if (&other == agent || distance > radius)
+        if (&other == agent || other_place != place || distance > radius)
         {
             continue;
         }
@@ -434,8 +667,9 @@ static void handle_observe(AgentServer &server, const char *line)
     bool first_speech = true;
     for (const SpeechEvent &ev : server.speech_events)
     {
+        Place *ev_place = ev.place ? ev.place : outdoors(server);
         float distance = tile_distance(agent->pos, ev.pos.x, ev.pos.y);
-        if (distance <= radius)
+        if (ev_place == place && distance <= radius)
         {
             json += first_speech ? "" : ",";
             first_speech = false;
@@ -464,6 +698,7 @@ static void handle_command(AgentServer &server, const char *line)
     {
         server.world.destroy();
         server.world = Dispatcher::create();
+        server.world.world.time_of_day = 8.0f;
         server.agents.clear();
         server.speech_events.clear();
         server.tick = 0;
@@ -487,6 +722,7 @@ static void handle_command(AgentServer &server, const char *line)
                 fclose(f);
                 server.world.destroy();
                 server.world = WorldFile::load(path);
+                server.world.world.time_of_day = 8.0f;
                 server.agents.clear();
                 server.speech_events.clear();
                 server.tick = 0;
@@ -533,6 +769,22 @@ static void handle_command(AgentServer &server, const char *line)
     {
         handle_stop(server, line);
     }
+    else if (strcmp(cmd, "enter") == 0)
+    {
+        handle_enter(server, line);
+    }
+    else if (strcmp(cmd, "leave") == 0)
+    {
+        handle_leave(server, line);
+    }
+    else if (strcmp(cmd, "pickup") == 0)
+    {
+        handle_pickup(server, line);
+    }
+    else if (strcmp(cmd, "drop") == 0)
+    {
+        handle_drop(server, line);
+    }
     else if (strcmp(cmd, "step") == 0)
     {
         handle_step(server, line);
@@ -552,7 +804,8 @@ static void handle_command(AgentServer &server, const char *line)
     else if (strcmp(cmd, "agents") == 0)
     {
         std::string json;
-        appendf(json, "{\"ok\":true,\"tick\":%d,", server.tick);
+        appendf(json, "{\"ok\":true,\"tick\":%d,\"time_of_day\":%g,", server.tick,
+                server.world.world.time_of_day);
         append_agents(json, server);
         json += '}';
         reply(server, json);
@@ -582,6 +835,7 @@ int run_agent_server()
     dup2(fileno(stderr), fileno(stdout));
 
     server.world = Dispatcher::create();
+    server.world.world.time_of_day = 8.0f;
     server.resources = load_resource_names();
 
     std::string line;

@@ -14,6 +14,14 @@ ROAD = 4  # Roads are 4x4 tiles, centered on their position.
 
 PUBLIC_PLACES = ["Café", "Library", "Town Hall", "Bakery", "Market", "Workshop", "School", "Clinic"]
 
+EDUCATIONAL_ITEMS = {
+    "Café": "Solar Prism",
+    "Library": "Historical Ledger",
+    "Fountain Square": "Botany Notes",
+    "Bakery": "Flour Sack",
+    "Town Hall": "Festival Banner",
+}
+
 
 @dataclass
 class Location:
@@ -91,6 +99,21 @@ def generate_town(town, residents, seed=0, blocks_x=3, blocks_y=2, spawn_npcs=Fa
 
     px, py = park
     locations.append(Location("Fountain Square", "park", (px + 12, py + 9), (px + 12, py + 12)))
+
+    for loc in locations:
+        item_id = EDUCATIONAL_ITEMS.get(loc.name)
+        if not item_id:
+            continue
+        cx, cy = loc.center
+        ex, ey = loc.entrance
+        candidates = (
+            [(ex, ey + 1), (ex - 1, ey), (ex + 1, ey)]
+            if loc.kind == "park"
+            else [(cx + 4, cy - 4), (cx - 5, cy - 4), (cx + 4, cy), (cx - 5, cy)]
+        )
+        for ix, iy in candidates:
+            if town.place("item", ix, iy, id=item_id):
+                break
 
     bounds = (x0 - ROAD // 2, y0 - ROAD // 2, x0 + blocks_x * BLOCK + ROAD // 2, y0 + blocks_y * BLOCK + ROAD // 2)
     plan = TownPlan(seed, locations, bounds, homes)

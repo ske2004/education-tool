@@ -142,17 +142,40 @@ class Town:
     def stop(self, agent):
         self._call("stop", agent=agent)
 
+    def enter(self, agent):
+        """Moves an agent inside a nearby building. Returns the building's {"x", "y"}."""
+        return self._call("enter", agent=agent)["building"]
+
+    def leave(self, agent):
+        """Moves an agent back outdoors from a building. Returns {"x", "y"}."""
+        reply = self._call("leave", agent=agent)
+        return {"x": reply["x"], "y": reply["y"]}
+
+    def pickup(self, agent):
+        """Picks up a nearby item and adds it to the agent's inventory. Returns the item name."""
+        return self._call("pickup", agent=agent)["item"]
+
+    def drop(self, agent, item):
+        """Drops an item from the agent's inventory onto its current tile."""
+        self._call("drop", agent=agent, item=_plain(item))
+
     def step(self, ticks=1):
         """Advances time. Walking agents move one tile per tick.
 
         Returns {"tick": ..., "agents": [{"agent", "name", "x", "y", "moving"}]}.
         """
         reply = self._call("step", ticks=ticks)
-        return {"tick": reply["tick"], "agents": reply["agents"]}
+        res = {"tick": reply["tick"], "agents": reply["agents"]}
+        if "time_of_day" in reply:
+            res["time_of_day"] = reply["time_of_day"]
+        return res
 
     def agents(self):
         reply = self._call("agents")
-        return {"tick": reply["tick"], "agents": reply["agents"]}
+        res = {"tick": reply["tick"], "agents": reply["agents"]}
+        if "time_of_day" in reply:
+            res["time_of_day"] = reply["time_of_day"]
+        return res
 
     def say(self, agent, text):
         """Records an agent speaking out loud."""
@@ -170,6 +193,8 @@ class Town:
         """
         reply = self._call("observe", agent=agent, radius=radius)
         res = {key: reply[key] for key in ("tick", "self", "objects", "agents")}
+        if "time_of_day" in reply:
+            res["time_of_day"] = reply["time_of_day"]
         if "speech" in reply:
             res["speech"] = reply["speech"]
         return res

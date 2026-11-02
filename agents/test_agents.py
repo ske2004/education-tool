@@ -94,6 +94,84 @@ class TownTest(unittest.TestCase):
         with self.assertRaises(TownError):
             self.town.load("/no/such/world.dat")
 
+    def test_enter_leave_and_interior_navigation(self):
+        self.town.place("building", 0, 0, floors=2)
+        ada = self.town.spawn("Ada", 0, -5)
+        ben = self.town.spawn("Ben", 0, -5)
+        cleo = self.town.spawn("Cleo", 25, 25)
+
+        with self.assertRaises(TownError):
+            self.town.enter(cleo)  # Too far from any building.
+        with self.assertRaises(TownError):
+            self.town.leave(ada)  # Not inside a building yet.
+
+        bld = self.town.enter(ada)
+        self.assertEqual(bld, {"x": 0, "y": 0})
+        with self.assertRaises(TownError):
+            self.town.enter(ada)  # Already inside.
+
+        obs_ada = self.town.observe(ada, radius=20)
+        self.assertTrue(obs_ada["self"]["inside"])
+        # Ben is still outdoors, so Ada inside does not see Ben.
+        self.assertEqual(obs_ada["agents"], [])
+        # Interior has perimeter walls.
+        self.assertTrue(any(o["type"] == "wall" for o in obs_ada["objects"]))
+
+        # Ben enters the same building and now they see each other inside.
+        self.town.enter(ben)
+        obs_ada = self.town.observe(ada, radius=20)
+        self.assertEqual([a["name"] for a in obs_ada["agents"]], ["Ben"])
+
+        # Ada walks inside the room.
+        steps = self.town.go(ada, 1, -8)
+        self.assertGreater(steps, 0)
+        self.town.step(steps)
+        obs_ada = self.town.observe(ada)
+        self.assertEqual((obs_ada["self"]["x"], obs_ada["self"]["y"]), (1, -8))
+
+        # Ada leaves the building and returns to her outdoor entrance tile.
+        out_pos = self.town.leave(ada)
+        self.assertEqual(out_pos, {"x": 0, "y": -5})
+        obs_ada = self.town.observe(ada)
+        self.assertFalse(obs_ada["self"]["inside"])
+        self.assertEqual((obs_ada["self"]["x"], obs_ada["self"]["y"]), (0, -5))
+
+    def test_pickup_and_drop_inventory(self):
+        self.assertTrue(self.town.place("item", 1, 0, id="Solar Prism"))
+        ada = self.town.spawn("Ada", 0, 0)
+
+        seen = self.town.observe(ada, radius=5)
+        self.assertEqual(seen["objects"][0]["type"], "item")
+        self.assertEqual(seen["objects"][0]["id"], "Solar Prism")
+
+        picked = self.town.pickup(ada)
+        self.assertEqual(picked, "Solar Prism")
+
+        obs = self.town.observe(ada, radius=5)
+        self.assertEqual(obs["self"]["inventory"], ["Solar Prism"])
+        self.assertEqual(obs["objects"], [])
+
+        with self.assertRaises(TownError):
+            self.town.pickup(ada)  # No item left nearby.
+        with self.assertRaises(TownError):
+            self.town.drop(ada, "Nonexistent")
+
+        self.town.drop(ada, "Solar Prism")
+        obs_after = self.town.observe(ada, radius=5)
+        self.assertEqual(obs_after["self"]["inventory"], [])
+        self.assertEqual(len(obs_after["objects"]), 1)
+        self.assertEqual(obs_after["objects"][0]["id"], "Solar Prism")
+
+    def test_time_of_day_advances(self):
+        ada = self.town.spawn("Ada", 0, 0)
+        obs0 = self.town.observe(ada)
+        self.assertAlmostEqual(obs0["time_of_day"], 8.0, places=2)
+
+        state = self.town.step(30)
+        self.assertAlmostEqual(state["time_of_day"], 8.5, places=2)
+        obs1 = self.town.observe(ada)
+        self.assertAlmostEqual(obs1["time_of_day"], 8.5, places=2)
+
 
 @needs_engine
 class TownGenTest(unittest.TestCase):

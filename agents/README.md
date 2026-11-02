@@ -92,12 +92,15 @@ with Town() as town:
 | --- | --- |
 | `new_world()`, `load(path)`, `save(path)` | Replace, load or save the world (editor format). |
 | `export_gltf(path)` | Export the world as `.glb`. |
-| `place(type, x, y, floors=, id=)` | Place an outdoor object; `False` when its tiles are taken. Types are the editor's: `road`, `building`, `tree`, `prop` (with `id`, e.g. `bench`), ... |
+| `place(type, x, y, floors=, id=)` | Place an outdoor object; `False` when its tiles are taken. Types are the editor's: `road`, `building`, `castle`, `tree`, `item`, `prop` (with `id`, e.g. `bench`), ... |
 | `objects()` | Every outdoor object. |
 | `spawn(name, x, y)` | Add an agent on a walkable tile; returns its ID. |
-| `go(agent, x, y)`, `stop(agent)` | Start or stop walking; `go` returns the number of steps. |
-| `step(ticks=1)` | Advance time; returns every agent's position. |
-| `observe(agent, radius=10)` | Nearby objects and agents, nearest first, with distances. |
+| `go(agent, x, y)`, `stop(agent)` | Start or stop walking in the agent's current place; `go` returns the number of steps. |
+| `enter(agent)`, `leave(agent)` | Enter a nearby building's interior room (generating it if needed) or return outdoors. |
+| `pickup(agent)`, `drop(agent, item)` | Pick up a nearby `item` into the agent's inventory or drop an inventory item onto the current tile. |
+| `say(agent, text)`, `speech()` | Record an agent speaking in the engine and query recent speech events. |
+| `step(ticks=1)` | Advance time (and `time_of_day`); returns every agent's position, `inside` state and `inventory`. |
+| `observe(agent, radius=10)` | Nearby objects, agents and speech in the same place, nearest first, with distances and `time_of_day`. |
 
 Commands that fail raise `TownError`.
 
@@ -112,44 +115,29 @@ false.
 > {"cmd": "place", "type": "building", "x": 10, "y": 6, "floors": 2}
 < {"ok":true}
 > {"cmd": "spawn", "name": "Ada", "x": -5, "y": -5}
-< {"ok":true,"agent":{"agent":0,"name":"Ada","x":-5,"y":-5,"moving":false}}
+< {"ok":true,"agent":{"agent":0,"name":"Ada","x":-5,"y":-5,"moving":false,"inside":false,"inventory":[]}}
 > {"cmd": "go", "agent": 0, "x": 10, "y": 1}
 < {"ok":true,"steps":21}
 > {"cmd": "step", "ticks": 3}
-< {"ok":true,"tick":3,"agents":[{"agent":0,"name":"Ada","x":-2,"y":-5,"moving":true}]}
+< {"ok":true,"tick":3,"time_of_day":8.05,"agents":[{"agent":0,"name":"Ada","x":-2,"y":-5,"moving":true,"inside":false,"inventory":[]}]}
 ```
 
 Commands: `new`, `load`, `save`, `export` (all but `new` take `path`),
-`place`, `objects`, `spawn`, `go`, `stop`, `step`, `observe`, `agents` and
-`quit`. Tiles are the editor's grid coordinates; `y` is the editor's depth
-axis. The command reader is deliberately small: string values can't contain
-quotes or backslashes.
+`place`, `objects`, `spawn`, `go`, `stop`, `enter`, `leave`, `pickup`, `drop`,
+`say`, `speech`, `step`, `observe`, `agents` and `quit`. Tiles are the
+editor's grid coordinates; `y` is the editor's depth axis. The command reader
+is deliberately small: string values can't contain quotes or backslashes.
 
-## Limits
+## Interactive 3D Viewer (`viewer.html`)
 
-- **Outdoors only.** Agents walk the outdoor place; "inside" a building is
-  tracked by the demo, not simulated. Interiors exist in the world format but
-  agents can't walk them yet.
-- **Agents don't collide** with each other, and props, grass and water don't
-  block walking (the same rules as the playtest's NPCs).
-- **Speech lives in Python.** The engine doesn't know who said what; hearing is
-  a distance check in `demo.py`.
-- **Turns are sequential.** Residents decide one after another so later ones
-  hear earlier ones, which makes a turn as slow as all its requests together.
-- **Short memory.** Each resident sees its last 12 events, with no
-  summarising or reflection, so long runs forget the morning.
+- **Playback Speed Controls**: Switch between `0.5x`, `1x`, `2x` and `4x`
+  playback speeds or scrub to any tick.
+- **Resident Inspector & Camera Follow**: Click any resident in the cast list
+  (or their floating name pill in 3D) to lock the camera onto them and inspect
+  their role, goal, current location (`Inside <Building>` or `Outdoors`),
+  collected educational items and latest speech/thought. Click **Free Camera**
+  to unlock.
+- **Dynamic Time-of-Day Sky & Sun Angle**: The directional sun position, warmth
+  and sky background evolve smoothly as `time_of_day` advances through the
+  morning.
 
-## Next steps
-
-1. **Interiors.** Let agents enter buildings and walk their interior places,
-   reusing the playtest's door logic.
-2. **Gym-style wrapper.** `reset()` / `step(actions)` returning observations,
-   for reinforcement learning and benchmarks.
-3. **Memory and reflection.** Summarise each resident's day into longer-term
-   memories, as in the Generative Agents paper.
-4. **Parallel decisions.** Decide all residents at once per turn, and handle
-   overheard speech on the next turn, to cut wall-clock time.
-5. **Engine-side events.** Move speech and interactions (picking up items,
-   opening doors) into the engine so other clients see them too.
-6. **Live view.** Stream positions to the editor or a browser while the
-   simulation runs instead of replaying afterwards.

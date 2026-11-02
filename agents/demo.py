@@ -87,6 +87,14 @@ PERSONAS = [
 
 COLORS = ["#e4572e", "#2e86ab", "#f3a712", "#7b2cbf", "#2a9d8f"]
 
+EDUCATIONAL_NOTES = {
+    "Solar Prism": "splits sunlight into a visible spectrum via refraction",
+    "Historical Ledger": "records the town's founding waterwheel engineering",
+    "Botany Notes": "catalogues native wetland flora around the pond",
+    "Flour Sack": "demonstrates yeast fermentation ratios for sourdough",
+    "Festival Banner": "illustrates geometric symmetry for the town square",
+}
+
 
 @dataclass
 class Resident:
@@ -98,6 +106,7 @@ class Resident:
     moving: bool = False
     destination: str = None  # The place or person it's walking to.
     inside: str = None  # The building it's inside.
+    inventory: list = field(default_factory=list)
     memory: list = field(default_factory=list)
     heard: list = field(default_factory=list)
 
@@ -116,6 +125,7 @@ class Simulation:
         self.places = {location.name: location for location in plan.locations}
         self.buildings = {location.center: location.name for location in plan.locations if location.kind != "park"}
         self.tick = 0
+        self.time_of_day = START_MINUTES / 60.0
         self.events = []
 
         self.residents = []
@@ -123,7 +133,7 @@ class Simulation:
             home = plan.homes[persona.name]
             agent = town.spawn(persona.name, *home.entrance)
             resident = Resident(agent, persona, COLORS[i % len(COLORS)], *home.entrance)
-            resident.inside = home.name
+            self._enter_building(resident, home.name)
             self.residents.append(resident)
         self.frames = [self._frame()]
 
@@ -139,6 +149,38 @@ class Simulation:
         resident.memory.append(entry)
         if len(resident.memory) > 24:
             resident.memory = self.mind.summarize_memory(resident.memory)
+
+    def _enter_building(self, resident, building_name):
+        if hasattr(self.town, "enter"):
+            try:
+                self.town.enter(resident.id)
+            except TownError:
+                pass
+        resident.inside = building_name
+
+    def _leave_building(self, resident):
+        if hasattr(self.town, "leave"):
+            try:
+                pos = self.town.leave(resident.id)
+                if isinstance(pos, dict) and "x" in pos and "y" in pos:
+                    resident.x, resident.y = pos["x"], pos["y"]
+            except TownError:
+                pass
+        resident.inside = None
+
+    def _try_pickup(self, resident):
+        if not hasattr(self.town, "pickup") or resident.inside:
+            return
+        try:
+            item = self.town.pickup(resident.id)
+        except TownError:
+            return
+        if item:
+            if item not in resident.inventory:
+                resident.inventory.append(item)
+            self._event(resident, "pickup", item)
+            note = EDUCATIONAL_NOTES.get(item, f"a useful {item}")
+            self._remember(resident, f"{self.clock()} You discovered {item} ({note}).")
 
     def turn(self):
         if self.parallel:
@@ -170,16 +212,27 @@ class Simulation:
     def step(self):
         state = self.town.step(1)
         self.tick = state["tick"]
+        if "time_of_day" in state:
+            self.time_of_day = state["time_of_day"]
+        else:
+            self.time_of_day = (START_MINUTES + self.tick * MINUTES_PER_TICK) / 60.0
         for resident, agent in zip(self.residents, state["agents"]):
             arrived = resident.moving and not agent["moving"]
-            resident.x, resident.y, resident.moving = agent["x"], agent["y"], agent["moving"]
+            if not agent.get("inside"):
+                resident.x, resident.y = agent["x"], agent["y"]
+            resident.moving = agent["moving"]
+            if "inventory" in agent:
+                resident.inventory = list(agent["inventory"])
+            if not resident.inside:
+                self._try_pickup(resident)
             if arrived and resident.destination:
-                place = self.places.get(resident.destination)
-                if place and place.kind != "park":
-                    resident.inside = place.name
-                self._event(resident, "arrive", resident.destination)
-                self._remember(resident, f"{self.clock()} You arrived at {resident.destination}.")
+                dest = resident.destination
                 resident.destination = None
+                place = self.places.get(dest)
+                self._event(resident, "arrive", dest)
+                self._remember(resident, f"{self.clock()} You arrived at {dest}.")
+                if place and place.kind != "park":
+                    self._enter_building(resident, place.name)
         self.frames.append(self._frame())
 
     def situation(self, resident):
@@ -187,6 +240,11 @@ class Simulation:
         at = self.place_at(resident)
         others = [r for r in self.residents if r is not resident]
         distances = {agent["name"]: agent["distance"] for agent in seen["agents"]}
+        for other in others:
+            if other.name not in distances and not resident.inside and not other.inside:
+                d = _distance(resident, other)
+                if d <= SIGHT:
+                    distances[other.name] = d
         nearby = [name for name, distance in distances.items() if distance <= HEARING]
 
         lines = [f"It's {self.clock()}."]
@@ -198,6 +256,12 @@ class Simulation:
             lines.append(f"You are out in the street, at tile ({resident.x}, {resident.y}).")
         if resident.moving and resident.destination:
             lines.append(f"You are walking to {resident.destination}.")
+        if resident.inventory:
+            items_desc = ", ".join(
+                f"{it} ({EDUCATIONAL_NOTES[it]})" if it in EDUCATIONAL_NOTES else it
+                for it in resident.inventory
+            )
+            lines.append(f"You are carrying: {items_desc}.")
 
         people = []
         for other in others:
@@ -249,6 +313,11 @@ class Simulation:
             self._event(resident, "thought", action.thought)
 
         if action.say:
+            if hasattr(self.town, "say"):
+                try:
+                    self.town.say(resident.id, action.say)
+                except (TownError, ValueError):
+                    pass
             self._event(resident, "say", action.say)
             self._remember(resident, f'{self.clock()} You said: "{action.say}"')
             for other in self.residents:
@@ -269,6 +338,9 @@ class Simulation:
             other = next(r for r in self.residents if r.name == target)
             tile = (other.x, other.y)
 
+        if resident.inside:
+            self._leave_building(resident)
+
         try:
             steps = self.town.go(resident.id, *tile)
         except TownError:
@@ -279,6 +351,9 @@ class Simulation:
         resident.moving = steps > 0
         self._event(resident, "go", target)
         if steps == 0:
+            place = self.places.get(target)
+            if place and place.kind != "park":
+                self._enter_building(resident, place.name)
             resident.destination = None
 
     def replay(self, mind_name):
@@ -304,7 +379,10 @@ class Simulation:
         }
 
     def _frame(self):
-        return [[r.x, r.y, 1 if r.inside else 0] for r in self.residents]
+        return [
+            [r.x, r.y, 1 if r.inside else 0, r.inside or "", list(r.inventory), round(self.time_of_day, 3)]
+            for r in self.residents
+        ]
 
     def _event(self, resident, kind, text):
         event = {"tick": self.tick, "agent": resident.id, "kind": kind, "text": text}
@@ -361,6 +439,8 @@ def print_event(simulation, resident, event):
         print(f'{clock}  {resident.name}: "{text}"')
     elif kind == "thought":
         print(f"{clock}  {resident.name} thinks: {text}")
+    elif kind == "pickup":
+        print(f"{clock}  {resident.name} picks up {text}")
     elif kind == "go":
         print(f"{clock}  {resident.name} heads to {text}")
     elif kind == "arrive":

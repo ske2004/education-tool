@@ -100,10 +100,52 @@
     min-height: 0;
   }
   #cast { padding: 14px 16px 6px; border-bottom: 1px solid var(--line); }
-  .person { display: grid; grid-template-columns: 12px 1fr; gap: 2px 8px; margin-bottom: 10px; }
+  .person {
+    display: grid;
+    grid-template-columns: 12px 1fr;
+    gap: 2px 8px;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .person:hover { background: rgb(127 127 127 / 0.08); }
+  .person.active {
+    background: rgb(46 134 171 / 0.12);
+    border-color: var(--accent);
+  }
   .dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; }
   .person b { font-size: 14px; }
   .person small { grid-column: 2; color: var(--muted); font-size: 12px; }
+  #inspector {
+    display: none;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    background: rgb(46 134 171 / 0.06);
+    font-size: 12.5px;
+  }
+  #inspector.visible { display: block; }
+  .insp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .insp-header b { font-size: 14px; }
+  #free-cam {
+    min-width: auto;
+    padding: 2px 8px;
+    font-size: 11.5px;
+    border-radius: 999px;
+  }
+  .insp-row { margin: 4px 0; color: var(--muted); }
+  .insp-row span { color: var(--ink); font-weight: 500; }
+  .inv-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .inv-pill {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 11.5px;
+    color: var(--ink);
+  }
   #log { flex: 1; overflow-y: auto; padding: 10px 16px 16px; }
   .entry { margin: 0 0 8px; }
   .entry time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; font-size: 12px; }
@@ -112,7 +154,7 @@
   footer {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     padding: 10px 16px;
     background: var(--panel);
     border-top: 1px solid var(--line);
@@ -126,6 +168,19 @@
     padding: 5px 12px;
   }
   button { min-width: 72px; cursor: pointer; }
+  .speed-group { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .speed-btn {
+    min-width: 42px;
+    border: 0;
+    border-right: 1px solid var(--line);
+    border-radius: 0;
+    padding: 5px 8px;
+    font-size: 12.5px;
+    background: var(--bg);
+  }
+  .speed-btn:last-child { border-right: 0; }
+  .speed-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
+  .name { pointer-events: auto; cursor: pointer; }
   input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
   label { display: flex; align-items: center; gap: 5px; color: var(--muted); white-space: nowrap; }
   #error { position: absolute; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; color: #fff; background: rgb(0 0 0 / 0.6); }
@@ -148,16 +203,27 @@
   </div>
   <aside>
     <div id="cast"></div>
+    <div id="inspector">
+      <div class="insp-header">
+        <b id="insp-title">Resident</b>
+        <button id="free-cam" type="button">Free Camera</button>
+      </div>
+      <div class="insp-row">Goal: <span id="insp-goal"></span></div>
+      <div class="insp-row">Location: <span id="insp-loc"></span></div>
+      <div class="insp-row">Inventory: <div id="insp-inv" class="inv-list"></div></div>
+      <div class="insp-row">Latest: <span id="insp-status"></span></div>
+    </div>
     <div id="log" aria-live="polite"></div>
   </aside>
   <footer>
     <button id="play" type="button">Pause</button>
     <input id="scrub" type="range" min="0" step="0.01" value="0" aria-label="Time">
-    <select id="speed" aria-label="Speed">
-      <option value="2">Slow</option>
-      <option value="5" selected>Normal</option>
-      <option value="12">Fast</option>
-    </select>
+    <div class="speed-group" role="group" aria-label="Playback Speed">
+      <button type="button" class="speed-btn" data-rate="2.5">0.5x</button>
+      <button type="button" class="speed-btn active" data-rate="5">1x</button>
+      <button type="button" class="speed-btn" data-rate="10">2x</button>
+      <button type="button" class="speed-btn" data-rate="20">4x</button>
+    </div>
     <label><input id="thoughts" type="checkbox" checked> Thoughts</label>
   </footer>
 </div>
@@ -188,8 +254,23 @@ const labels = document.getElementById("labels");
 const log = document.getElementById("log");
 const scrub = document.getElementById("scrub");
 const playButton = document.getElementById("play");
-const speed = document.getElementById("speed");
+const speedButtons = Array.from(document.querySelectorAll(".speed-btn"));
 const showThoughts = document.getElementById("thoughts");
+const inspector = document.getElementById("inspector");
+const inspTitle = document.getElementById("insp-title");
+const inspGoal = document.getElementById("insp-goal");
+const inspLoc = document.getElementById("insp-loc");
+const inspInv = document.getElementById("insp-inv");
+const inspStatus = document.getElementById("insp-status");
+const freeCamBtn = document.getElementById("free-cam");
+
+let playbackRate = 5;
+speedButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    playbackRate = Number(btn.dataset.rate);
+    speedButtons.forEach((b) => b.classList.toggle("active", b === btn));
+  });
+});
 
 document.getElementById("meta").textContent =
   `${replay.agents.length} residents · decided by ${replay.mind} · town seed ${replay.seed}`;
@@ -201,7 +282,8 @@ const toWorld = (x, y, height = 0) => new THREE.Vector3(x + 0.5, height, -(y + 0
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
-scene.add(new THREE.HemisphereLight(0xffffff, 0x4a5a30, 2.2));
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x4a5a30, 2.2);
+scene.add(hemiLight);
 const sun = new THREE.DirectionalLight(0xfff2dd, 2.0);
 sun.position.set(30, 60, 20);
 scene.add(sun);
@@ -223,6 +305,17 @@ new GLTFLoader().parse(glb.buffer, "", (gltf) => scene.add(gltf.scene), (error) 
   box.textContent = `Couldn't load the town: ${error.message || error}`;
 });
 
+let followedAgent = null;
+const castRows = [];
+
+function selectAgent(index) {
+  followedAgent = index;
+  castRows.forEach((row, i) => row.classList.toggle("active", i === index));
+  inspector.classList.toggle("visible", index !== null);
+}
+
+freeCamBtn.addEventListener("click", () => selectAgent(null));
+
 // Residents.
 const agents = replay.agents.map((agent, i) => {
   const body = new THREE.Mesh(
@@ -239,6 +332,7 @@ const agents = replay.agents.map((agent, i) => {
   name.className = "name";
   name.textContent = agent.name;
   name.style.background = agent.color;
+  name.addEventListener("click", () => selectAgent(i));
   tag.append(bubble, name);
   labels.append(tag);
 
@@ -259,9 +353,10 @@ const places = replay.locations.map((location) => {
 
 // Cast list.
 const cast = document.getElementById("cast");
-for (const agent of replay.agents) {
+replay.agents.forEach((agent, i) => {
   const row = document.createElement("div");
   row.className = "person";
+  row.title = "Click to inspect and follow in 3D";
   const dot = document.createElement("span");
   dot.className = "dot";
   dot.style.background = agent.color;
@@ -270,22 +365,83 @@ for (const agent of replay.agents) {
   const goal = document.createElement("small");
   goal.textContent = agent.goal;
   row.append(dot, name, goal);
+  row.addEventListener("click", () => selectAgent(followedAgent === i ? null : i));
   cast.append(row);
-}
+  castRows.push(row);
+});
 
 const clockAt = (tick) => {
   const minutes = replay.startMinutes + Math.floor(tick) * replay.minutesPerTick;
   return `${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 };
 
-const latest = (events, tick) => {
+const latest = (events, tick, windowTicks = BUBBLE_TICKS) => {
   let found = null;
   for (const event of events) {
     if (event.tick > tick) break;
     found = event;
   }
-  return found && tick - found.tick < BUBBLE_TICKS ? found : null;
+  return found && tick - found.tick < windowTicks ? found : null;
 };
+
+function updateSunAndSky(tick, frameTod) {
+  const hours = typeof frameTod === "number"
+    ? frameTod
+    : (replay.startMinutes + tick * replay.minutesPerTick) / 60;
+  // Normalize morning progress from 8:00 (0) to 12:00 (1)
+  const progress = Math.min(Math.max((hours - 8) / 4, 0), 1);
+  const angle = (hours - 6) / 12 * Math.PI;
+  sun.position.set(Math.cos(angle) * 55, Math.max(25, Math.sin(angle) * 70), 22);
+
+  const warmSun = new THREE.Color(0xffe0b2);
+  const noonSun = new THREE.Color(0xfffcf5);
+  sun.color.copy(warmSun).lerp(noonSun, progress);
+  sun.intensity = 1.8 + 0.5 * progress;
+  hemiLight.intensity = 1.9 + 0.4 * progress;
+
+  const dawnSky = new THREE.Color(0x9bc4e2);
+  const noonSky = new THREE.Color(0xb8ddf5);
+  stage.style.backgroundColor = `#${dawnSky.lerp(noonSky, progress).getHexString()}`;
+}
+
+function updateInspector(tick, frameIndex) {
+  if (followedAgent === null) return;
+  const agent = agents[followedAgent];
+  const frameEntry = replay.frames[frameIndex][followedAgent];
+  const [x, y, insideFlag, insidePlace, inventory] = frameEntry;
+
+  inspTitle.textContent = `${agent.name} · ${agent.role}`;
+  inspTitle.style.color = agent.color;
+  inspGoal.textContent = agent.goal;
+  inspLoc.textContent = insideFlag
+    ? `Inside ${insidePlace || "building"}`
+    : `Outdoors at (${Math.round(x)}, ${Math.round(y)})`;
+
+  inspInv.replaceChildren();
+  const items = Array.isArray(inventory) ? inventory : [];
+  if (items.length === 0) {
+    const empty = document.createElement("span");
+    empty.textContent = "None yet";
+    inspInv.append(empty);
+  } else {
+    for (const item of items) {
+      const pill = document.createElement("span");
+      pill.className = "inv-pill";
+      pill.textContent = item;
+      inspInv.append(pill);
+    }
+  }
+
+  const said = latest(agent.says, tick, 9999);
+  const thought = latest(agent.thinks, tick, 9999);
+  if (said && (!thought || said.tick >= thought.tick)) {
+    inspStatus.textContent = `“${said.text}”`;
+  } else if (thought) {
+    inspStatus.textContent = `(${thought.text})`;
+  } else {
+    inspStatus.textContent = "Starting the morning";
+  }
+}
 
 let shownUpTo = -1;
 let shownThoughts = showThoughts.checked;
@@ -309,6 +465,7 @@ function updateLog(tick) {
     const text =
       event.kind === "say" ? `: “${event.text}”`
       : event.kind === "thought" ? ` thinks: ${event.text}`
+      : event.kind === "pickup" ? ` picks up ${event.text}`
       : event.kind === "go" ? ` heads to ${event.text}`
       : ` arrives at ${event.text}`;
     entry.append(time, who, text);
@@ -354,7 +511,7 @@ function frame(now) {
   const dt = Math.min(Math.max((now - previous) / 1000, 0), 0.1);
   previous = now;
   if (playing) {
-    tick = Math.min(tick + dt * Number(speed.value), lastTick);
+    tick = Math.min(tick + dt * playbackRate, lastTick);
     if (tick >= lastTick) playing = false;
     scrub.value = tick;
   }
@@ -382,8 +539,19 @@ function frame(now) {
     agent.tag.style.opacity = inside ? 0.55 : 1;
     place(agent.tag, agent.body.position.clone().add(new THREE.Vector3(0, inside ? 1.2 : 1.1, 0)));
   });
+
+  if (followedAgent !== null) {
+    const targetPos = agents[followedAgent].body.position;
+    const delta = targetPos.clone().sub(controls.target).multiplyScalar(0.12);
+    controls.target.add(delta);
+    camera.position.add(delta);
+  }
+
   for (const p of places) place(p.label, p.at);
 
+  const frameTod = replay.frames[a][0] && replay.frames[a][0][5];
+  updateSunAndSky(tick, frameTod);
+  updateInspector(tick, a);
   document.getElementById("clock-big").textContent = clockAt(tick);
   updateLog(tick);
   controls.update();
