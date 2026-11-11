@@ -1,0 +1,21 @@
+extends RefCounted
+## Input actions, added in code so the project file stays readable.
+
+const KEYS := {
+	"move_forward": [KEY_W, KEY_UP],
+	"move_back": [KEY_S, KEY_DOWN],
+	"move_left": [KEY_A, KEY_LEFT],
+	"move_right": [KEY_D, KEY_RIGHT],
+	"interact": [KEY_E, KEY_SPACE, KEY_ENTER],
+}
+
+
+static func ensure_actions() -> void:
+	for action in KEYS:
+		if InputMap.has_action(action):
+			continue
+		InputMap.add_action(action)
+		for key in KEYS[action]:
+			var event := InputEventKey.new()
+			event.physical_keycode = key
+			InputMap.action_add_event(action, event)

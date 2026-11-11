@@ -1,0 +1,89 @@
+# Educore Stories (Godot)
+
+A storytelling engine for teachers, built on Godot 4.7. Teachers make a story
+out of places, people, items and conversations in a simple editor; students
+play it in 3D: they walk around, talk to people, pick things up and go through
+doors until one of their choices ends the story.
+
+This is an early version of moving Educore to Godot. It doesn't use the C++
+engine.
+
+## Running it
+
+Open this folder in Godot 4.7 and press F5, or:
+
+```sh
+godot --path godot                                   # menu
+godot --path godot -- --play res://stories/water_cycle.json
+godot --path godot -- --edit res://stories/water_cycle.json
+```
+
+The menu can play or edit the sample story ("Where Does the Water Go?"),
+create a new story, or open a story file.
+
+## Making a story
+
+- **Places** are outdoor areas or rooms. Place props (houses, trees, shelves...)
+  with the tools above the 3D view: click to place, drag to move, R to turn,
+  Delete to remove. Right-drag turns the camera, the wheel zooms, WASD moves.
+- **Doors** take students to another place. Students arrive in front of the
+  door that leads back, so give each place a door back.
+- **People** say lines. A conversation starts at the first line marked "Can
+  start a conversation" whose conditions hold. Each choice leads to another
+  line or ends the talk, and can give or take an item, set a fact, or end the
+  story with an ending text.
+- **Items** can lie in a place for students to pick up, or be given in a
+  conversation. What students read when they pick one up is a good place for
+  the lesson itself.
+- **Conditions** ("Only if they have" / "Not if they have") check items and
+  facts, so people can say different things as the story goes on.
+
+The left panel lists problems to fix before playing, such as doors that lead
+nowhere or a story with no ending. Play tries the story straight from the
+editor.
+
+## Story files
+
+Stories are JSON (`stories/water_cycle.json` is a full example):
+
+```json
+{
+  "title": "...", "intro": "...", "goal": "...",
+  "start_place": "village", "start_pos": [0, 7],
+  "places": [{"id": "village", "name": "Village square", "indoor": false, "size": 40,
+              "ground": "#86b85e", "sky": "#8ec5ff",
+              "props": [{"kind": "well", "pos": [0, -3], "rot": 0, "color": "#a9a297"}],
+              "doors": [{"pos": [11, -5.4], "rot": 0, "to": "library", "label": "Library"}]}],
+  "characters": [{"id": "mayor", "name": "Mayor Lena", "place": "village", "pos": [-2, -0.5],
+                  "lines": [{"text": "...", "opens": true, "requires": "", "unless": "learned",
+                             "choices": [{"text": "...", "next": 1, "requires": "", "unless": "",
+                                          "gives": "", "takes": "", "sets": "quest", "ending": ""}]}]}],
+  "items": [{"id": "notebook", "name": "Cloud notebook", "place": "library", "pos": [0, 0],
+             "description": "..."}]
+}
+```
+
+Positions are `[x, z]` in metres on the ground, with `z` towards the camera.
+`next` is a line index, or -1 to stop talking. Missing fields get defaults.
+
+## Code
+
+| File | What it does |
+| --- | --- |
+| `scripts/story.gd` | Story data: defaults, loading, saving, problems, IDs |
+| `scripts/story_state.gd` | A student's progress: place, backpack, facts, ending |
+| `scripts/world_builder.gd` | Builds a place's 3D scene from simple shapes |
+| `scripts/play_mode.gd` | Playing: walking, talking, items, doors, HUD |
+| `scripts/editor_mode.gd` | The teacher's editor |
+| `scripts/camera_rig.gd`, `player.gd`, `actor.gd` | Camera, student, animation |
+| `scripts/dialogue_box.gd`, `ui_theme.gd` | Dialogue UI and the app's look |
+| `scripts/main.gd` | Menu and switching between screens |
+
+## Tests
+
+```sh
+godot --headless --path godot -s res://tests/run_tests.gd
+```
+
+They check the story logic, a full walkthrough of the sample, building every
+place, and drive play mode and the editor without a window.
