@@ -838,13 +838,19 @@ func _inspect_place() -> void:
 	_header("Place")
 	_row("Name", _line_edit(place["name"], func(v):
 		place["name"] = v
-		_changed(true, true)
+		_changed(true, true, false, [place, "name"])
 		_refresh_place_picker()
 	))
-	inspector.add_child(_check("Indoors (walls and lamp light)", place["indoor"], _setter(place, "indoor", true, true)))
+	inspector.add_child(_check("Indoors (walls and lamp light)", place["indoor"], func(v):
+		place["indoor"] = v
+		_changed(true, true, true, [place, "indoor"])
+	))
 	_row("Size in metres", _spin(place["size"], 8, 120, 2, _setter(place, "size", true)))
 	_row("Ground or floor colour", _color(place["ground"], _setter(place, "ground", true)))
 	_row("Sky or wall colour", _color(place["sky"], _setter(place, "sky", true)))
+	if not place["indoor"]:
+		var weathers := [["clear", "Clear, a few clouds"], ["cloudy", "Cloudy"], ["rain", "Rain"]]
+		_row("Weather", _option(weathers, place["weather"], _setter(place, "weather", true)))
 	var delete := _danger_button("Delete place", _delete_place.bind(place_id))
 	delete.disabled = story["places"].size() <= 1
 	inspector.add_child(delete)

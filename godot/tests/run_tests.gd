@@ -38,13 +38,20 @@ func _run() -> void:
 		"test_doors_lead_back_to_the_door_you_came_through",
 		"test_new_ids_are_unique",
 		"test_every_place_builds",
+		"test_water_and_weather_build",
 	]:
 		current = test
 		call(test)
 	current = "test_play_mode_talk_pick_up_and_travel"
 	await test_play_mode_talk_pick_up_and_travel()
+	current = "test_play_mode_touch"
+	await test_play_mode_touch()
+	current = "test_rivers_block_and_bridges_cross"
+	await test_rivers_block_and_bridges_cross()
 	current = "test_editor_places_moves_and_deletes"
 	await test_editor_places_moves_and_deletes()
+	current = "test_editor_undo_and_redo"
+	await test_editor_undo_and_redo()
 	print("%d checks, %d failed" % [checks, failures])
 	quit(1 if failures > 0 else 0)
 
@@ -204,6 +211,56 @@ func test_every_place_builds() -> void:
 	var library := Builder.build_place(story, "library", {"notebook": true})
 	check(not library.get_meta("entities").has("item:notebook"), "collected items stay gone")
 	library.free()
+
+
+func test_water_and_weather_build() -> void:
+	var story := StoryData.normalized({"places": [{"id": "a", "weather": "hail"}, {"id": "b", "weather": "rain"}]})
+	check(story["places"][0]["weather"] == "clear", "unknown weather becomes clear")
+	check(story["places"][1]["weather"] == "rain", "rain stays rain")
+	for weather in StoryData.WEATHERS:
+		story["places"][0]["weather"] = weather
+		story["places"][0]["props"] = []
+		for kind in ["pond", "river", "bridge", "fountain"]:
+			story["places"][0]["props"].append({"kind": kind, "pos": [0, 0], "rot": 0, "color": StoryData.PROP_COLORS[kind]})
+		var node := Builder.build_place(story, "a")
+		var rain := node.get_children().filter(func(n): return n is CPUParticles3D)
+		check(rain.size() == (1 if weather == "rain" else 0), "%s weather has %s rain" % [weather, "" if weather == "rain" else "no"])
+		var clouds := node.get_children().filter(func(n): return n.get_script() == Builder.Drifter)
+		check(clouds.size() == Builder.WEATHER[weather]["clouds"], "%s weather has %d clouds" % [weather, clouds.size()])
+		node.free()
+	story["places"][0]["indoor"] = true
+	var room := Builder.build_place(story, "a")
+	check(room.get_children().filter(func(n): return n.get_script() == Builder.Drifter).is_empty(), "rooms have no clouds")
+	room.free()
+
+
+## Walks right for two seconds from x = -4 across a river running along z at
+## x = 0, and returns where the student ends up.
+func _walk_across(props: Array) -> Vector3:
+	var story := StoryData.normalized({"places": [{"id": "a", "size": 30, "props": props}],
+			"start_place": "a", "start_pos": [-4, 0]})
+	var play = PlayMode.new()
+	play.setup(story)
+	root.add_child(play)
+	await _frames(3)
+	play._close_card()
+	Input.action_press("move_right")
+	for i in 120:
+		await physics_frame
+	Input.action_release("move_right")
+	var at: Vector3 = play.player.global_position
+	play.queue_free()
+	await _frames(2)
+	return at
+
+
+func test_rivers_block_and_bridges_cross() -> void:
+	var river := {"kind": "river", "pos": [0, 0], "rot": 0}
+	var blocked := await _walk_across([river])
+	check(blocked.x < -1.5, "a river stops the student (x = %.2f)" % blocked.x)
+	var crossed := await _walk_across([river, {"kind": "bridge", "pos": [0, 0], "rot": 0}])
+	check(crossed.x > 3.0, "a bridge takes the student across (x = %.2f)" % crossed.x)
+	check(absf(crossed.z) < 0.5, "the bridge's rails keep the student on it (z = %.2f)" % crossed.z)
 
 
 func _frames(n: int) -> void:

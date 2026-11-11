@@ -10,6 +10,7 @@ const VERSION := 1
 const PROP_KINDS: Array[String] = [
 	"house", "tree", "pine", "rock", "fence", "lamp",
 	"bench", "well", "crate", "table", "shelf", "plant",
+	"pond", "river", "bridge", "fountain",
 ]
 
 const PROP_COLORS := {
@@ -17,13 +18,18 @@ const PROP_COLORS := {
 	"rock": "#9b9a92", "fence": "#a27a52", "lamp": "#3c3c46",
 	"bench": "#8c5b3c", "well": "#a9a297", "crate": "#ba8b50",
 	"table": "#8c5b3c", "shelf": "#7b4f33", "plant": "#50995b",
+	"pond": "#3f8fcf", "river": "#3f8fcf", "bridge": "#8c5b3c", "fountain": "#b9b3a7",
 }
 
 ## How far from a prop's centre (in metres) a click still selects it.
 const PROP_RADIUS := {
 	"house": 2.4, "well": 1.2, "fence": 1.5, "rock": 1.0,
 	"table": 1.1, "shelf": 1.1, "bench": 0.9,
+	"pond": 2.6, "river": 2.0, "bridge": 1.8, "fountain": 1.5,
 }
+
+## Outdoor weather: how cloudy the sky is, and whether it rains.
+const WEATHERS: Array[String] = ["clear", "cloudy", "rain"]
 
 ## Students arriving through a door appear this far in front of it.
 const DOOR_SPAWN_DISTANCE := 2.6
@@ -75,6 +81,9 @@ static func fill_place(place: Dictionary) -> void:
 	place["size"] = clampf(float(place.get("size", default_size)), 8.0, 120.0)
 	_text(place, "ground", "#c9a77c" if place["indoor"] else "#86b85e")
 	_text(place, "sky", "#efe1c6" if place["indoor"] else "#8ec5ff")
+	_text(place, "weather", "clear")
+	if not WEATHERS.has(place["weather"]):
+		place["weather"] = "clear"
 	place["props"] = _list(place.get("props"))
 	for prop in place["props"]:
 		_text(prop, "kind", "tree")

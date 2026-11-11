@@ -208,6 +208,60 @@
 						14.5,
 						-3.5
 					]
+				},
+				{
+					"kind": "river",
+					"pos": [
+						-16,
+						-18
+					],
+					"rot": 90,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "river",
+					"pos": [
+						-8,
+						-18
+					],
+					"rot": 90,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "river",
+					"pos": [
+						0,
+						-18
+					],
+					"rot": 90,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "river",
+					"pos": [
+						8,
+						-18
+					],
+					"rot": 90,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "river",
+					"pos": [
+						16,
+						-18
+					],
+					"rot": 90,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "pond",
+					"pos": [
+						6.5,
+						9.5
+					],
+					"rot": 0,
+					"color": "#3f8fcf"
 				}
 			],
 			"doors": [

@@ -48,6 +48,11 @@ special headers.
 - **Places** are outdoor areas or rooms. Place props (houses, trees, shelves...)
   with the tools above the 3D view: click to place, drag to move, R to turn,
   Delete to remove. Right-drag turns the camera, the wheel zooms, WASD moves.
+  Ctrl+Z undoes and Ctrl+Shift+Z (or Ctrl+Y) redoes.
+- **Water**: ponds, fountains, and river sections 8 m long that join up when
+  placed 8 m apart. Rivers stop students; put a bridge across one to let
+  them over.
+- **Weather**: outdoor places can be clear, cloudy or rainy.
 - **Doors** take students to another place. Students arrive in front of the
   door that leads back, so give each place a door back.
 - **People** say lines. A conversation starts at the first line marked "Can
@@ -59,6 +64,9 @@ special headers.
   the lesson itself.
 - **Conditions** ("Only if they have" / "Not if they have") check items and
   facts, so people can say different things as the story goes on.
+
+On a tablet, students walk with an on-screen joystick, drag to look around,
+pinch to zoom and tap to talk.
 
 The left panel lists problems to fix before playing, such as doors that lead
 nowhere or a story with no ending. Play tries the story straight from the
@@ -100,6 +108,9 @@ Positions are `[x, z]` in metres on the ground, with `z` towards the camera.
 | `scripts/camera_rig.gd`, `player.gd`, `actor.gd` | Camera, student, animation |
 | `scripts/dialogue_box.gd`, `ui_theme.gd` | Dialogue UI and the app's look |
 | `scripts/main.gd` | Menu and switching between screens |
+| `scripts/story_files.gd` | Opening and saving stories; browser drafts and story links |
+| `scripts/touch_stick.gd` | The on-screen joystick for tablets |
+| `scripts/drifter.gd`, `rain.gd`, `shaders/water.gdshader` | Clouds, rain and water |
 
 ## Tests
 
