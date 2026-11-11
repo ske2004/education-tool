@@ -40,7 +40,7 @@ never call the real API.
 
 ## How the demo works
 
-Each turn is 10 minutes of town time. Every resident, in order:
+Each turn is 10 minutes of town time. Every resident:
 
 1. **Perceives.** The engine reports what's within 14 tiles: buildings
    (named, e.g. the Café), props, trees, and other residents with their
@@ -55,6 +55,13 @@ Each turn is 10 minutes of town time. Every resident, in order:
 
 Then the engine advances 10 ticks, one tile of walking per tick. Residents
 who reach a building go inside until they leave.
+
+Residents decide at the same time by default, so a turn takes about as long
+as its slowest request. Nobody hears what another resident says in the same
+turn; they hear it at the start of their next turn. Actions still apply in
+resident order. `--sequential` decides one resident at a time, so later
+residents hear earlier ones in the same turn. `--offline` always decides
+sequentially, so scripted runs stay reproducible.
 
 The residents have personas and goals that need each other (a librarian
 starting a book club, a painter looking for somewhere to exhibit, a clerk

@@ -170,6 +170,7 @@ bool UmkaModule::load(const char *source)
         return false;
     }
 
+    clear_error();
     this->umka = umkaAlloc();
 
     // TODO: Better way to copy these strings
@@ -183,6 +184,7 @@ bool UmkaModule::load(const char *source)
     if (!umkaInit(umka, source, NULL, 1024 * 1024, NULL, 0, NULL, false, false,
                   on_umka_warning))
     {
+        capture_error();
         return false;
     }
 
@@ -190,6 +192,7 @@ bool UmkaModule::load(const char *source)
 
     if (!umkaCompile(umka))
     {
+        capture_error();
         return false;
     }
 
@@ -218,6 +221,7 @@ UmkaError *UmkaModule::call(const char *module, const char *function,
 
     if (offset < 0)
     {
+        capture_error();
         return umkaGetError(umka);
     }
 
@@ -230,10 +234,15 @@ UmkaError *UmkaModule::call(const char *module, const char *function,
     _data = data;
     assert(_data);
 
-    // TODO: Somehow handle error codes from umkaCall
-    umkaCall(umka, offset, nparams, params, result);
+    clear_error();
+    int call_status = umkaCall(umka, offset, nparams, params, result);
 
     _data = nullptr;
+
+    if (call_status != 0 || !umkaAlive(umka))
+    {
+        capture_error();
+    }
 
     return umkaGetError(umka);
 }
@@ -241,4 +250,24 @@ UmkaError *UmkaModule::call(const char *module, const char *function,
 UmkaError *UmkaModule::get_error()
 {
     return umkaGetError(umka);
+}
+
+void UmkaModule::clear_error()
+{
+    has_error = false;
+    error[0] = '\0';
+}
+
+void UmkaModule::capture_error()
+{
+    UmkaError *e = umka ? umkaGetError(umka) : nullptr;
+    if (e == nullptr || e->msg == nullptr || e->msg[0] == '\0')
+    {
+        return;
+    }
+
+    has_error = true;
+    snprintf(error, sizeof(error), "%s:%d:%d: %s",
+             e->fileName ? e->fileName : "?", e->line, e->pos, e->msg);
+    fprintf(stderr, "UMKA ERROR: %s\n", error);
 }
