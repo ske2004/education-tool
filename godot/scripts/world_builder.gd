@@ -451,6 +451,11 @@ static func _put(node: Node3D, entry: Dictionary) -> void:
 	node.rotation.y = deg_to_rad(entry.get("rot", 0.0))
 
 
+## Whether the Compatibility renderer (browsers, older machines) is drawing.
+static func compatibility() -> bool:
+	return RenderingServer.get_current_rendering_method() == "gl_compatibility"
+
+
 static func _add_environment(root: Node3D, indoor: bool, size: float, sky: Color, ground: Color, weather: Dictionary) -> void:
 	var env := Environment.new()
 	if not indoor:
@@ -479,6 +484,20 @@ static func _add_environment(root: Node3D, indoor: bool, size: float, sky: Color
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.ssao_enabled = true
 	env.glow_enabled = true
+	var sun_energy: float = 0.35 if indoor else weather["sun"]
+	if compatibility():
+		# The Compatibility renderer lights the sky's ambient and fog far more
+		# strongly, which washes everything out; tone it down to match.
+		env.glow_enabled = false
+		env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+		if not indoor:
+			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+			env.ambient_light_color = sky.lerp(Color.WHITE, 0.45)
+			env.ambient_light_energy = 0.5
+			env.fog_density *= 0.15
+			sun_energy *= 0.75
+		else:
+			env.ambient_light_energy *= 0.6
 	var world_environment := WorldEnvironment.new()
 	world_environment.environment = env
 	root.add_child(world_environment)
@@ -486,14 +505,14 @@ static func _add_environment(root: Node3D, indoor: bool, size: float, sky: Color
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-50, -35, 0)
 	sun.shadow_enabled = true
-	sun.light_energy = 0.35 if indoor else weather["sun"]
+	sun.light_energy = sun_energy
 	sun.light_color = Color("#fff4e0")
 	root.add_child(sun)
 	if indoor:
 		var lamp := OmniLight3D.new()
 		lamp.position = Vector3(0, WALL_HEIGHT + 0.5, 0)
 		lamp.omni_range = size
-		lamp.light_energy = 1.4
+		lamp.light_energy = 0.8 if compatibility() else 1.4
 		lamp.light_color = Color("#ffe1b0")
 		lamp.shadow_enabled = true
 		root.add_child(lamp)
