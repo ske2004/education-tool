@@ -9,9 +9,12 @@ signal exit_requested
 const StoryData = preload("res://scripts/story.gd")
 const Builder = preload("res://scripts/world_builder.gd")
 const CameraRig = preload("res://scripts/camera_rig.gd")
+const StoryFiles = preload("res://scripts/story_files.gd")
 
 const GRID := 0.5
 const SELECT_COLOR := Color("#ffb347")
+## In a browser, how often (in seconds) the story is kept as a draft.
+const DRAFT_EVERY := 1.0
 
 var story: Dictionary
 var path := ""
@@ -33,14 +36,15 @@ var viewport: SubViewport
 var place_node: Node3D
 var rig
 var hint: Label
-var open_dialog: FileDialog
-var save_dialog: FileDialog
+var files: StoryFiles
 var confirm: ConfirmationDialog
 var _on_confirm := Callable()
 var _ring: Node3D
 var _drag_moved := false
 var _outline_pending := false
 var _inspector_pending := false
+var _draft_pending := false
+var _draft_timer := 0.0
 
 
 func _init() -> void:
@@ -59,7 +63,10 @@ func load_story(s: Dictionary, file_path: String) -> void:
 	_update_title()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_draft_timer += delta
+	if _draft_timer >= DRAFT_EVERY:
+		_save_draft()
 	rig.pan_keys = view.has_focus()
 	Builder.update_walls(place_node, rig.camera.global_position)
 	if _outline_pending:
@@ -98,8 +105,12 @@ func _build() -> void:
 	bar.add_child(status_label)
 	bar.add_child(_button("New", _on_new))
 	bar.add_child(_button("Open...", _on_open))
-	bar.add_child(_button("Save", _on_save))
-	bar.add_child(_button("Save as...", _on_save_as))
+	if StoryFiles.on_web():
+		bar.add_child(_button("Download", _on_save))
+		bar.add_child(_button("Copy student link", _on_copy_link))
+	else:
+		bar.add_child(_button("Save", _on_save))
+		bar.add_child(_button("Save as...", _on_save_as))
 	var play := _button("Play", _on_play)
 	play.theme_type_variation = "AccentButton"
 	play.custom_minimum_size.x = 110
@@ -178,10 +189,11 @@ func _build() -> void:
 	inspector.add_theme_constant_override("separation", 10)
 	body.add_child(_sidebar(inspector, 400))
 
-	open_dialog = _file_dialog(FileDialog.FILE_MODE_OPEN_FILE)
-	open_dialog.file_selected.connect(_open_file)
-	save_dialog = _file_dialog(FileDialog.FILE_MODE_SAVE_FILE)
-	save_dialog.file_selected.connect(_write)
+	files = StoryFiles.new()
+	files.opened.connect(load_story)
+	files.saved.connect(_on_saved)
+	files.failed.connect(_status)
+	add_child(files)
 	confirm = ConfirmationDialog.new()
 	confirm.confirmed.connect(func(): _on_confirm.call())
 	add_child(confirm)
@@ -198,17 +210,6 @@ func _sidebar(content: VBoxContainer, width: float) -> Control:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(content)
 	return panel
-
-
-func _file_dialog(mode: FileDialog.FileMode) -> FileDialog:
-	var dialog := FileDialog.new()
-	dialog.file_mode = mode
-	dialog.access = FileDialog.ACCESS_FILESYSTEM
-	dialog.filters = PackedStringArray(["*.json ; Story files"])
-	dialog.use_native_dialog = true
-	dialog.current_dir = OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
-	add_child(dialog)
-	return dialog
 
 
 # The 3D view -----------------------------------------------------------------
@@ -487,6 +488,7 @@ func _place_missing(id: String) -> bool:
 
 func _changed(view_changed := false, outline_changed := false, inspector_changed := false) -> void:
 	dirty = true
+	_draft_pending = StoryFiles.on_web()
 	_update_title()
 	if view_changed:
 		_rebuild_view()
@@ -570,45 +572,53 @@ func _on_new() -> void:
 
 
 func _on_open() -> void:
-	_ask_if_dirty(func(): open_dialog.popup_centered_ratio(0.6))
-
-
-func _open_file(file_path: String) -> void:
-	var result := StoryData.load_file(file_path)
-	if result.has("error"):
-		_status(result["error"])
-	else:
-		load_story(result["story"], file_path)
+	_ask_if_dirty(files.ask_open)
 
 
 func _on_save() -> void:
-	if path == "" or path.begins_with("res://"):
-		_on_save_as()
+	if StoryFiles.on_web() or path == "" or path.begins_with("res://"):
+		files.ask_save(story)
 	else:
-		_write(path)
+		files.save(story, path)
 
 
 func _on_save_as() -> void:
-	save_dialog.current_file = StoryData.slug(story["title"]) + ".json"
-	save_dialog.popup_centered_ratio(0.6)
+	files.ask_save(story)
 
 
-func _write(file_path: String) -> void:
-	var error := StoryData.save_file(story, file_path)
-	if error != "":
-		_status(error)
-		return
+func _on_saved(file_path: String) -> void:
 	path = file_path
 	dirty = false
-	_status("Saved " + file_path.get_file())
+	_status(("Downloaded " if StoryFiles.on_web() else "Saved ") + file_path.get_file())
 	_update_title()
 
 
+## Copies a link that plays the story as it is now. The whole story is in the
+## link, so nothing has to be uploaded anywhere.
+func _on_copy_link() -> void:
+	DisplayServer.clipboard_set(StoryFiles.link_for(story))
+	var problems := StoryData.problems(story).size()
+	if problems > 0:
+		_status("Link copied, but the story still has %d problem%s to fix." % [problems, "" if problems == 1 else "s"])
+	else:
+		_status("Link copied. Students open it to play this version of the story.")
+
+
+## Keeps the story in the browser so the menu can offer to continue it.
+func _save_draft() -> void:
+	_draft_timer = 0.0
+	if _draft_pending:
+		_draft_pending = false
+		StoryFiles.save_draft(story)
+
+
 func _on_play() -> void:
+	_save_draft()
 	play_requested.emit(story.duplicate(true))
 
 
 func _on_exit() -> void:
+	_save_draft()
 	_ask_if_dirty(func(): exit_requested.emit())
 
 

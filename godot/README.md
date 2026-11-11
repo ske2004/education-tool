@@ -21,6 +21,28 @@ godot --path godot -- --edit res://stories/water_cycle.json
 The menu can play or edit the sample story ("Where Does the Water Go?"),
 create a new story, or open a story file.
 
+## In a browser
+
+Classrooms can use the web version, with nothing to install:
+
+```sh
+godot --headless --path godot --export-release Web ../build/web/index.html
+python3 -m http.server -d build/web 8000       # then open http://localhost:8000
+```
+
+The Pages workflow publishes it at `<pages site>/stories/`. In the browser:
+
+- **Copy student link** in the editor copies a link with the whole story
+  packed into it (after `#story=`). Students open it and start playing; the
+  story isn't uploaded anywhere. The link plays the story as it was when it
+  was copied, so copy a new one after changing the story.
+- **Download** saves the story as a JSON file, and **Open...** loads one.
+- The editor keeps a draft in the browser as you work, and the menu offers
+  to continue it.
+
+The export doesn't use threads, so any static file host works without
+special headers.
+
 ## Making a story
 
 - **Places** are outdoor areas or rooms. Place props (houses, trees, shelves...)

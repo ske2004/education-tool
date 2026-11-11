@@ -28,6 +28,11 @@ const PROP_RADIUS := {
 ## Students arriving through a door appear this far in front of it.
 const DOOR_SPAWN_DISTANCE := 2.6
 
+## The largest story a link may unpack to, so a bad link can't use up memory.
+const MAX_CODE_BYTES := 4 * 1024 * 1024
+
+static var _BASE64 := RegEx.create_from_string("^[A-Za-z0-9+/]+={0,2}$")
+
 const CHOICE_FIELDS: Array[String] = ["requires", "unless", "gives", "takes", "sets", "ending"]
 
 
@@ -252,13 +257,39 @@ static func problems(story: Dictionary) -> Array[String]:
 static func load_file(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {"error": "%s doesn't exist." % path}
-	var text := FileAccess.get_file_as_string(path)
+	return parse(FileAccess.get_file_as_string(path), path.get_file())
+
+
+## Reads a story from JSON text. Returns {"story": ...} or {"error": message}.
+static func parse(text: String, file_name := "The file") -> Dictionary:
 	var json := JSON.new()
 	if json.parse(text) != OK:
-		return {"error": "%s isn't valid JSON (line %d: %s)." % [path.get_file(), json.get_error_line(), json.get_error_message()]}
+		return {"error": "%s isn't valid JSON (line %d: %s)." % [file_name, json.get_error_line(), json.get_error_message()]}
 	if not (json.data is Dictionary):
-		return {"error": "%s isn't a story." % path.get_file()}
+		return {"error": "%s isn't a story." % file_name}
 	return {"story": normalized(json.data)}
+
+
+## The story packed into a short URL-safe code, so a whole story fits in a
+## link students can open without the teacher hosting any files.
+static func to_code(story: Dictionary) -> String:
+	var packed := JSON.stringify(story).to_utf8_buffer().compress(FileAccess.COMPRESSION_DEFLATE)
+	return Marshalls.raw_to_base64(packed).replace("+", "-").replace("/", "_").trim_suffix("=").trim_suffix("=")
+
+
+## Reads a story back from to_code(). Returns {"story": ...} or {"error": message}.
+static func from_code(code: String) -> Dictionary:
+	var b64 := code.strip_edges().replace("-", "+").replace("_", "/")
+	b64 += "=".repeat((4 - b64.length() % 4) % 4)
+	var packed := PackedByteArray()
+	if _BASE64.search(b64):
+		packed = Marshalls.base64_to_raw(b64)
+	var bytes := PackedByteArray()
+	if not packed.is_empty():
+		bytes = packed.decompress_dynamic(MAX_CODE_BYTES, FileAccess.COMPRESSION_DEFLATE)
+	if bytes.is_empty():
+		return {"error": "This story link is broken or incomplete."}
+	return parse(bytes.get_string_from_utf8(), "The story in this link")
 
 
 ## Writes the story and returns an error message, or "" on success.

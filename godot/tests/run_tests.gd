@@ -30,6 +30,8 @@ func _run() -> void:
 		"test_blank_story_explains_what_is_missing",
 		"test_normalized_fills_defaults",
 		"test_save_and_load_round_trip",
+		"test_story_links_round_trip",
+		"test_parse_reports_bad_files",
 		"test_walkthrough_reaches_the_ending",
 		"test_conditions_hide_choices",
 		"test_problems_catch_broken_links",
@@ -88,6 +90,28 @@ func test_save_and_load_round_trip() -> void:
 	check(JSON.stringify(loaded) == JSON.stringify(story), "loads back the same story")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(file))
 	check(StoryData.load_file("user://missing.json").has("error"), "missing files report an error")
+
+
+func test_story_links_round_trip() -> void:
+	var story := sample()
+	var code := StoryData.to_code(story)
+	check(code.length() < JSON.stringify(story).length() / 2, "a link code is much shorter than the story (%d chars)" % code.length())
+	var url_safe := true
+	for ch in code:
+		if not (ch.is_valid_identifier() or ch.is_valid_int() or ch == "-"):
+			url_safe = false
+	check(url_safe, "a link code only uses URL-safe characters")
+	var result := StoryData.from_code(code)
+	check(result.has("story") and JSON.stringify(result["story"]) == JSON.stringify(story), "a link code gives back the same story")
+	check(StoryData.from_code(code.substr(0, code.length() / 2)).has("error"), "a cut-off link reports an error")
+	check(StoryData.from_code("not a story!").has("error"), "a broken link reports an error")
+	check(StoryData.from_code("").has("error"), "an empty link reports an error")
+
+
+func test_parse_reports_bad_files() -> void:
+	check(StoryData.parse("{\"title\": \"x\"}").has("story"), "parses a minimal story")
+	check(StoryData.parse("{oops", "a.json")["error"].begins_with("a.json isn't valid JSON"), "names the file with bad JSON")
+	check(StoryData.parse("[1, 2]", "b.json").has("error"), "a JSON list isn't a story")
 
 
 func _talk(state, story: Dictionary, who: String, picks: Array) -> int:

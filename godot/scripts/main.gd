@@ -5,6 +5,8 @@ extends Node
 ##   --play <story.json>      play a story straight away
 ##   --edit <story.json>      open a story in the editor
 ##   --screenshot <out.png>   save a screenshot after --wait seconds (default 2), then quit
+##
+## In a browser, a link ending in #story=... plays the story packed into it.
 
 const StoryData = preload("res://scripts/story.gd")
 const Controls = preload("res://scripts/controls.gd")
@@ -13,32 +15,34 @@ const Builder = preload("res://scripts/world_builder.gd")
 const CameraRig = preload("res://scripts/camera_rig.gd")
 const PlayMode = preload("res://scripts/play_mode.gd")
 const StoryEditor = preload("res://scripts/editor_mode.gd")
+const StoryFiles = preload("res://scripts/story_files.gd")
 
 const SAMPLE := "res://stories/water_cycle.json"
 
 var screen: Node
 var editor: Node
-var open_dialog: FileDialog
+var files: StoryFiles
 var _open_to := "play"
 var message: Label
 
 
 func _ready() -> void:
 	Controls.ensure_actions()
-	open_dialog = FileDialog.new()
-	open_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	open_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	open_dialog.filters = PackedStringArray(["*.json ; Story files"])
-	open_dialog.use_native_dialog = true
-	open_dialog.current_dir = OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
-	open_dialog.file_selected.connect(_open_file)
-	add_child(open_dialog)
-	UITheme.apply(open_dialog)
+	files = StoryFiles.new()
+	files.opened.connect(_open_story)
+	files.failed.connect(_show_error)
+	add_child(files)
 
 	var args := OS.get_cmdline_user_args()
 	var play_path := _arg(args, "--play")
 	var edit_path := _arg(args, "--edit")
-	if play_path != "":
+	var linked := StoryFiles.story_in_link()
+	if linked.has("story"):
+		_play(linked["story"])
+	elif linked.has("error"):
+		_show_menu()
+		_show_error(linked["error"])
+	elif play_path != "":
 		_open_to = "play"
 		_open_file(play_path)
 	elif edit_path != "":
@@ -113,11 +117,15 @@ func _show_menu() -> void:
 	tagline.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(tagline)
 	box.add_child(_menu_button("Play the sample story", _play_sample, true))
+	var draft := StoryFiles.load_draft()
+	if not draft.is_empty():
+		box.add_child(_menu_button("Continue editing \"%s\"" % draft["title"], func(): _edit(draft, "")))
 	box.add_child(_menu_button("Create a new story", func(): _edit(StoryData.blank(), "")))
 	box.add_child(_menu_button("Edit the sample story", _edit_sample))
 	box.add_child(_menu_button("Open a story to edit...", _ask_open.bind("edit")))
 	box.add_child(_menu_button("Open a story to play...", _ask_open.bind("play")))
-	box.add_child(_menu_button("Quit", func(): get_tree().quit()))
+	if not StoryFiles.on_web():
+		box.add_child(_menu_button("Quit", func(): get_tree().quit()))
 	message = Label.new()
 	message.theme_type_variation = "WarningLabel"
 	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -148,23 +156,31 @@ func _edit_sample() -> void:
 
 func _ask_open(mode: String) -> void:
 	_open_to = mode
-	open_dialog.popup_centered_ratio(0.6)
+	files.ask_open()
 
 
 func _open_file(file_path: String) -> void:
 	var result := StoryData.load_file(file_path)
 	if result.has("error"):
-		if screen == null:
-			_show_menu()
-		if message:
-			message.text = result["error"]
-			message.visible = true
-		push_warning(result["error"])
-		return
-	if _open_to == "edit":
-		_edit(result["story"], file_path)
+		_show_error(result["error"])
 	else:
-		_play(result["story"])
+		_open_story(result["story"], file_path)
+
+
+func _open_story(story: Dictionary, file_path: String) -> void:
+	if _open_to == "edit":
+		_edit(story, file_path)
+	else:
+		_play(story)
+
+
+func _show_error(text: String) -> void:
+	if screen == null:
+		_show_menu()
+	if is_instance_valid(message):
+		message.text = text
+		message.visible = true
+	push_warning(text)
 
 
 # Play and edit ---------------------------------------------------------------
