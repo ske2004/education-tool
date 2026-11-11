@@ -276,3 +276,80 @@ func test_editor_places_moves_and_deletes() -> void:
 	check(editor.dirty, "edits mark the story unsaved")
 	editor.queue_free()
 	await _frames(1)
+
+
+func _ctrl_key(keycode: Key, shift := false) -> InputEventKey:
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.ctrl_pressed = true
+	event.shift_pressed = shift
+	event.pressed = true
+	return event
+
+
+func test_editor_undo_and_redo() -> void:
+	var editor = StoryEditor.new()
+	root.add_child(editor)
+	editor.load_story(sample(), SAMPLE)
+	await _frames(2)
+	check(editor.undo_button.disabled and editor.redo_button.disabled, "a fresh story has nothing to undo or redo")
+
+	var props_before: int = editor._place()["props"].size()
+	editor._set_tool("prop:tree")
+	editor._click(Vector2(2.0, 3.0), false)
+	check(not editor.undo_button.disabled, "adding a tree can be undone")
+	editor.undo()
+	check(editor._place()["props"].size() == props_before, "Undo removes the tree")
+	check(editor.selected == {"kind": "place", "id": "village"}, "the missing tree's selection falls back to the place")
+	check(editor.undo_button.disabled and not editor.redo_button.disabled, "then only Redo is possible")
+	editor.redo()
+	check(editor._place()["props"].size() == props_before + 1, "Redo brings the tree back")
+	check(editor.dirty, "undo and redo mark the story unsaved")
+
+	editor._click(Vector2(-2.0, -0.5), false)
+	var mayor_pos: Array = StoryData.find(editor.story, "characters", "mayor")["pos"].duplicate()
+	for x in [-3.0, -4.0, -5.0]:
+		editor._drag_to(Vector2(x, 1.0))
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	editor._on_view_input(release)
+	var steps: int = editor._undo.size()
+	editor.undo()
+	check(StoryData.find(editor.story, "characters", "mayor")["pos"] == mayor_pos, "one Undo puts back a whole drag")
+	check(editor.selected == {"kind": "character", "id": "mayor"}, "the mayor stays selected")
+	check(editor._undo.size() == steps - 1, "a drag is one step")
+
+	editor._select("story", "")
+	await _frames(2)
+	var title_before: String = editor.story["title"]
+	var title_edit: LineEdit = editor.inspector.find_children("*", "LineEdit", true, false)[0]
+	steps = editor._undo.size()
+	for text in ["R", "Ra", "Rain"]:
+		title_edit.text_changed.emit(text)
+	check(editor.story["title"] == "Rain" and editor._undo.size() == steps + 1, "typing a title is one step")
+	check(editor._redo.is_empty(), "a new edit clears Redo")
+	title_edit.grab_focus()
+	editor._shortcut_input(_ctrl_key(KEY_Z))
+	check(editor.story["title"] == "Rain", "Ctrl+Z is left to a focused text field")
+	title_edit.release_focus()
+	editor._shortcut_input(_ctrl_key(KEY_Z))
+	check(editor.story["title"] == title_before, "Ctrl+Z undoes the whole title at once")
+	editor._shortcut_input(_ctrl_key(KEY_Z, true))
+	check(editor.story["title"] == "Rain", "Ctrl+Shift+Z redoes it")
+	editor._shortcut_input(_ctrl_key(KEY_Z))
+	editor._shortcut_input(_ctrl_key(KEY_Y))
+	check(editor.story["title"] == "Rain", "so does Ctrl+Y")
+
+	editor._go_to("item", "notebook")
+	editor._add_place()
+	check(editor._place()["name"] == "New place", "adding a place shows it")
+	editor.undo()
+	check(editor.place_id == editor.story["start_place"], "undoing the place goes back to the start place")
+	await _frames(2)
+	check(editor.outline.get_child_count() > 0 and editor.inspector.get_child_count() > 0, "the outline and inspector rebuild")
+
+	editor.load_story(sample(), SAMPLE)
+	check(editor._undo.is_empty() and editor._redo.is_empty(), "loading a story clears the history")
+	check(editor.undo_button.disabled and editor.redo_button.disabled, "and disables Undo and Redo")
+	editor.queue_free()
+	await _frames(1)

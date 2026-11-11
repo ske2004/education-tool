@@ -15,6 +15,10 @@ const GRID := 0.5
 const SELECT_COLOR := Color("#ffb347")
 ## In a browser, how often (in seconds) the story is kept as a draft.
 const DRAFT_EVERY := 1.0
+## How many steps Undo can go back.
+const HISTORY := 100
+## Edits to the same field closer together than this (in ms) undo as one step.
+const BURST_MS := 1000
 
 var story: Dictionary
 var path := ""
@@ -45,6 +49,16 @@ var _outline_pending := false
 var _inspector_pending := false
 var _draft_pending := false
 var _draft_timer := 0.0
+var undo_button: Button
+var redo_button: Button
+## Earlier and undone versions of the story, oldest first.
+var _undo := []
+var _redo := []
+## The story as of the last recorded step.
+var _last := {}
+## The [entry, key] last edited, and when, so typing counts as one step.
+var _field := []
+var _field_time := 0
 
 
 func _init() -> void:
@@ -61,6 +75,26 @@ func load_story(s: Dictionary, file_path: String) -> void:
 	_show_place(story["start_place"])
 	_select("story", "")
 	_update_title()
+	_undo.clear()
+	_redo.clear()
+	_last = story.duplicate(true)
+	_field = []
+	_update_history_buttons()
+
+
+func _shortcut_input(event: InputEvent) -> void:
+	if not (event is InputEventKey and event.pressed and event.is_command_or_control_pressed()):
+		return
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit:
+		return
+	if event.keycode == KEY_Z and not event.shift_pressed:
+		undo()
+	elif event.keycode == KEY_Z or event.keycode == KEY_Y:
+		redo()
+	else:
+		return
+	get_viewport().set_input_as_handled()
 
 
 func _process(delta: float) -> void:
@@ -105,6 +139,10 @@ func _build() -> void:
 	bar.add_child(status_label)
 	bar.add_child(_button("New", _on_new))
 	bar.add_child(_button("Open...", _on_open))
+	undo_button = _button("Undo", undo)
+	bar.add_child(undo_button)
+	redo_button = _button("Redo", redo)
+	bar.add_child(redo_button)
 	if StoryFiles.on_web():
 		bar.add_child(_button("Download", _on_save))
 		bar.add_child(_button("Copy student link", _on_copy_link))
@@ -412,7 +450,7 @@ func _rotate_selected(degrees: float) -> void:
 	if entry.is_empty() or not entry.has("rot"):
 		return
 	entry["rot"] = fposmod(entry["rot"] + degrees, 360.0)
-	_changed(true, false, true)
+	_changed(true, false, true, [entry, "rot"])
 
 
 func _delete_selected() -> void:
@@ -486,7 +524,10 @@ func _place_missing(id: String) -> bool:
 
 # Changes ---------------------------------------------------------------------
 
-func _changed(view_changed := false, outline_changed := false, inspector_changed := false) -> void:
+## Call after every edit. `field` is the [entry, key] being edited, so a
+## burst of edits to it (like typing) undoes as one step.
+func _changed(view_changed := false, outline_changed := false, inspector_changed := false, field := []) -> void:
+	_record(field)
 	dirty = true
 	_draft_pending = StoryFiles.on_web()
 	_update_title()
@@ -501,7 +542,71 @@ func _changed(view_changed := false, outline_changed := false, inspector_changed
 func _setter(entry: Dictionary, key: String, view_changed := false, outline_changed := false) -> Callable:
 	return func(value):
 		entry[key] = value
-		_changed(view_changed, outline_changed)
+		_changed(view_changed, outline_changed, false, [entry, key])
+
+
+# Undo ------------------------------------------------------------------------
+
+## Keeps the story as it was before this edit so it can be undone.
+func _record(field: Array) -> void:
+	if story == _last:
+		return
+	var now := Time.get_ticks_msec()
+	var same_burst: bool = not field.is_empty() and not _field.is_empty() and is_same(field[0], _field[0]) \
+			and field[1] == _field[1] and now - _field_time < BURST_MS
+	if not same_burst:
+		_undo.append(_last)
+		if _undo.size() > HISTORY:
+			_undo.pop_front()
+	_redo.clear()
+	_last = story.duplicate(true)
+	_field = field
+	_field_time = now
+	_update_history_buttons()
+
+
+func undo() -> void:
+	if _undo.is_empty():
+		return
+	_redo.append(_last)
+	_restore(_undo.pop_back())
+
+
+func redo() -> void:
+	if _redo.is_empty():
+		return
+	_undo.append(_last)
+	_restore(_redo.pop_back())
+
+
+## Puts back an earlier version of the story, staying on the same place and
+## selection where they still exist.
+func _restore(snapshot: Dictionary) -> void:
+	story = snapshot.duplicate(true)
+	_last = snapshot
+	_field = []
+	dragging = ""
+	if _place_missing(place_id):
+		place_id = story["start_place"]
+		rig.position = Vector3.ZERO
+	var kind: String = selected["kind"]
+	var exists: bool = kind == "story" or (kind == "place" and selected["id"] == place_id) \
+			or not _entry(_selected_key()).is_empty()
+	if not exists:
+		selected = {"kind": "place", "id": place_id}
+	dirty = true
+	_draft_pending = StoryFiles.on_web()
+	_update_title()
+	_rebuild_view()
+	_refresh_place_picker()
+	_outline_pending = true
+	_inspector_pending = true
+	_update_history_buttons()
+
+
+func _update_history_buttons() -> void:
+	undo_button.disabled = _undo.is_empty()
+	redo_button.disabled = _redo.is_empty()
 
 
 func _update_title() -> void:
@@ -718,7 +823,7 @@ func _inspect_story() -> void:
 	_header("Story")
 	_row("Title", _line_edit(story["title"], func(v):
 		story["title"] = v
-		_changed(false, true)
+		_changed(false, true, false, [story, "title"])
 	))
 	_row("Introduction, shown when the game starts", _text_edit(story["intro"], _setter(story, "intro")))
 	_row("Goal, shown while playing", _line_edit(story["goal"], _setter(story, "goal")))
@@ -790,7 +895,7 @@ func _inspect_item() -> void:
 	_header("Item")
 	_row("Name", _line_edit(item["name"], func(v):
 		item["name"] = v
-		_changed(true, true)
+		_changed(true, true, false, [item, "name"])
 	))
 	_row("What students read when they pick it up", _text_edit(item["description"], _setter(item, "description")))
 	_row("Colour", _color(item["color"], _setter(item, "color", true)))
@@ -808,7 +913,7 @@ func _inspect_character() -> void:
 	_header("Person")
 	_row("Name", _line_edit(character["name"], func(v):
 		character["name"] = v
-		_changed(true, true)
+		_changed(true, true, false, [character, "name"])
 	))
 	_row("Colour", _color(character["color"], _setter(character, "color", true, true)))
 	_row("Place", _option(_place_options(), character["place"], func(v):
