@@ -1,7 +1,7 @@
 extends Node3D
 ## A third-person orbit camera: follows a target smoothly, orbits with the
-## right (or middle) mouse button, zooms with the wheel, and pulls in instead
-## of clipping through walls.
+## right (or middle) mouse button or one finger, zooms with the wheel or a
+## pinch, and pulls in instead of clipping through walls.
 
 var target: Node3D
 var yaw := 0.0
@@ -13,12 +13,15 @@ var max_distance := 40.0
 var auto_orbit := 0.0
 ## Moves the focus point with the movement keys (the editor's free camera).
 var pan_keys := false
-## Reads mouse input by itself. The editor turns this off and calls handle().
+## Reads mouse and touch input by itself. The editor turns this off and calls handle().
 var listen := true
 
 var arm: SpringArm3D
 var camera: Camera3D
 var _orbiting := false
+## Fingers on the 3D view (index -> position). Fingers that start on the HUD
+## never get here, because the HUD takes their touches first.
+var _touches := {}
 
 
 func _init() -> void:
@@ -75,12 +78,39 @@ func handle(event: InputEvent) -> bool:
 					distance = minf(max_distance, distance * 1.1)
 				return true
 	elif event is InputEventMouseMotion and _orbiting:
-		yaw -= event.relative.x * 0.008
-		pitch = clampf(pitch - event.relative.y * 0.006, deg_to_rad(-80.0), deg_to_rad(-8.0))
+		_orbit(event.relative)
 		return true
 	return false
 
 
+## Handles touch: one finger orbits, two fingers pinch to zoom. Mouse events
+## that Godot makes up from touches use the left button, so they never orbit.
+## Returns whether the event was used.
+func touch(event: InputEvent) -> bool:
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			_touches[event.index] = event.position
+			return true
+		return _touches.erase(event.index)
+	if event is InputEventScreenDrag and _touches.has(event.index):
+		if _touches.size() == 1:
+			_orbit(event.relative)
+		else:
+			var other: Vector2 = _touches[_touches.keys().filter(func(i): return i != event.index)[0]]
+			var before: float = _touches[event.index].distance_to(other)
+			var after: float = event.position.distance_to(other)
+			if before > 1.0 and after > 1.0:
+				distance = clampf(distance * before / after, min_distance, max_distance)
+		_touches[event.index] = event.position
+		return true
+	return false
+
+
+func _orbit(relative: Vector2) -> void:
+	yaw -= relative.x * 0.008
+	pitch = clampf(pitch - relative.y * 0.006, deg_to_rad(-80.0), deg_to_rad(-8.0))
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if listen and handle(event):
+	if listen and (handle(event) or touch(event)):
 		get_viewport().set_input_as_handled()

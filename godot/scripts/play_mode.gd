@@ -10,6 +10,11 @@ const Builder = preload("res://scripts/world_builder.gd")
 const Player = preload("res://scripts/player.gd")
 const CameraRig = preload("res://scripts/camera_rig.gd")
 const DialogueBox = preload("res://scripts/dialogue_box.gd")
+const TouchStick = preload("res://scripts/touch_stick.gd")
+
+## True on phones and tablets, and anywhere once the screen has been touched.
+## Kept between stories, so the joystick stays after "Play again".
+static var touch := OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")
 
 var story: Dictionary
 var exit_text := "Exit"
@@ -28,6 +33,8 @@ var busy := true
 var goal_label: Label
 var backpack: HFlowContainer
 var prompt: Button
+var exit_button: Button
+var stick: Control
 var toasts: VBoxContainer
 var dialogue
 var overlay: Control
@@ -49,6 +56,8 @@ func _ready() -> void:
 	rig.exclude(player)
 	player.rig = rig
 	_build_hud()
+	if touch:
+		_use_touch()
 	_start()
 
 
@@ -76,6 +85,7 @@ func _enter_place() -> void:
 
 
 func _process(_delta: float) -> void:
+	stick.visible = touch and not busy
 	if place_node:
 		Builder.update_walls(place_node, rig.camera.global_position)
 	if busy or place_node == null:
@@ -94,6 +104,12 @@ func _process(_delta: float) -> void:
 	if best.get("node") != focus.get("node"):
 		focus = best
 		_update_prompt()
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and not touch:
+		touch = true
+		_use_touch()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -305,7 +321,7 @@ func _build_hud() -> void:
 	goal_box.add_child(backpack)
 
 	top.add_child(_spacer(true, false))
-	var exit_button := Button.new()
+	exit_button = Button.new()
 	exit_button.text = exit_text
 	exit_button.focus_mode = Control.FOCUS_NONE
 	exit_button.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
@@ -342,6 +358,11 @@ func _build_hud() -> void:
 	toasts.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	toasts.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	toast_margin.add_child(toasts)
+
+	stick = TouchStick.new()
+	stick.visible = false
+	stick.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_KEEP_SIZE, 30)
+	layer.add_child(stick)
 
 	overlay = ColorRect.new()
 	overlay.color = Color(0.1, 0.08, 0.05, 0.45)
@@ -392,6 +413,8 @@ func _show_card(title: String, text: String, buttons: Array) -> void:
 		button.text = buttons[i][0]
 		if i == 0:
 			button.theme_type_variation = "AccentButton"
+		if touch:
+			button.custom_minimum_size = Vector2(150, 64)
 		button.pressed.connect(buttons[i][1])
 		row.add_child(button)
 	overlay.visible = true
@@ -411,7 +434,17 @@ func _update_prompt() -> void:
 		return
 	prompt.visible = not busy and not focus.is_empty()
 	if prompt.visible:
-		prompt.text = "E   %s" % focus["label"]
+		prompt.text = focus["label"] if touch else "E   %s" % focus["label"]
+
+
+## Shows the joystick and makes the buttons big enough to tap.
+func _use_touch() -> void:
+	prompt.custom_minimum_size = Vector2(320, 88)
+	prompt.add_theme_font_size_override("font_size", 26)
+	exit_button.custom_minimum_size = Vector2(120, 60)
+	dialogue.touch = true
+	stick.visible = not busy
+	_update_prompt()
 
 
 func _refresh_backpack() -> void:

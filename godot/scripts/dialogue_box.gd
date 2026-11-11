@@ -1,12 +1,15 @@
 extends PanelContainer
 ## Shows what a character says, typed out letter by letter, and the
 ## student's choices. Emits `chosen` with the picked choice's index.
+## On a touch screen, tapping the box does what the interact key does.
 
 signal chosen(index: int)
 
 var speaker: Label
 var body: RichTextLabel
 var options: VBoxContainer
+## Set by play mode on touch screens: makes the choices bigger to tap.
+var touch := false
 var _choices: Array = []
 var _tween: Tween
 
@@ -26,6 +29,7 @@ func _init() -> void:
 	body.scroll_active = false
 	body.custom_minimum_size = Vector2(0, 56)
 	body.add_theme_font_size_override("normal_font_size", 20)
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(body)
 	options = VBoxContainer.new()
 	options.add_theme_constant_override("separation", 6)
@@ -46,6 +50,14 @@ func show_line(who: String, color: Color, text: String, choices: Array) -> void:
 	_tween = create_tween()
 	_tween.tween_property(body, "visible_ratio", 1.0, clampf(text.length() * 0.018, 0.2, 2.5))
 	_tween.finished.connect(_show_choices)
+
+
+## Taps advance. Only real touches count, not the mouse clicks Godot makes up
+## from them, so one tap never advances twice. Choice buttons take their own taps.
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and event.pressed:
+		advance()
+		accept_event()
 
 
 func typing() -> bool:
@@ -88,6 +100,8 @@ func _show_choices() -> void:
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.focus_mode = Control.FOCUS_NONE
 		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		if touch:
+			button.custom_minimum_size.y = 56
 		var index: int = _choices[n]["index"]
 		button.pressed.connect(func(): chosen.emit(index))
 		options.add_child(button)

@@ -241,6 +241,89 @@ func test_play_mode_talk_pick_up_and_travel() -> void:
 	await _frames(1)
 
 
+## Touches go through the root viewport like real ones, so the HUD gets first pick.
+func _touch(index: int, at: Vector2, pressed := true) -> void:
+	var event := InputEventScreenTouch.new()
+	event.index = index
+	event.position = at
+	event.pressed = pressed
+	root.push_input(event, true)
+
+
+func _drag(index: int, from: Vector2, to: Vector2) -> void:
+	var event := InputEventScreenDrag.new()
+	event.index = index
+	event.position = to
+	event.relative = to - from
+	root.push_input(event, true)
+
+
+func _walk_input() -> Vector2:
+	return Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+
+
+func test_play_mode_touch() -> void:
+	var play = PlayMode.new()
+	play.setup(sample())
+	root.add_child(play)
+	await _frames(3)
+	play._close_card()
+	await _frames(1)
+	check(not play.stick.visible, "no joystick before the screen is touched")
+
+	var stick_at: Vector2 = play.stick.get_global_rect().get_center()
+	_touch(0, stick_at)
+	check(play.touch and play.stick.visible, "the first touch shows the joystick")
+	var start: Vector3 = play.player.global_position
+	var yaw: float = play.rig.yaw
+	_drag(0, stick_at, stick_at + Vector2(0, -100))
+	check(_walk_input().y < -0.9, "pushing the stick up holds move_forward: %s" % _walk_input())
+	await create_timer(0.4).timeout
+	var moved: Vector3 = play.player.global_position - start
+	var forward := Vector3.FORWARD.rotated(Vector3.UP, play.rig.yaw)
+	check(moved.dot(forward) > 0.5, "the stick walks the student forward: %s" % moved)
+	check(play.rig.yaw == yaw, "the stick doesn't turn the camera")
+	_touch(0, stick_at + Vector2(0, -100), false)
+	check(_walk_input() == Vector2.ZERO, "letting go of the stick stops the student")
+
+	var spot: Vector2 = root.get_visible_rect().size * Vector2(0.5, 0.4)
+	_touch(0, spot)
+	_drag(0, spot, spot + Vector2(120, 0))
+	check(play.rig.yaw < yaw - 0.5, "a one-finger drag turns the camera")
+	var distance: float = play.rig.distance
+	_touch(1, spot + Vector2(200, 0))
+	_drag(1, spot + Vector2(200, 0), spot + Vector2(400, 0))
+	check(play.rig.distance < distance, "spreading two fingers zooms in")
+	_touch(1, spot + Vector2(400, 0), false)
+	_touch(0, spot + Vector2(120, 0), false)
+
+	yaw = play.rig.yaw
+	var exit_at: Vector2 = play.exit_button.get_global_rect().get_center()
+	_touch(0, exit_at)
+	_drag(0, exit_at, spot)
+	_touch(0, spot, false)
+	check(play.rig.yaw == yaw, "a drag that starts on a button doesn't turn the camera")
+
+	var mayor: Dictionary = play.place_node.get_meta("interactables").filter(func(e): return e["id"] is String and e["id"] == "mayor")[0]
+	play._activate(mayor)
+	await _frames(2)
+	check(play.dialogue.typing(), "the mayor starts talking")
+	var box_at: Vector2 = play.dialogue.get_global_rect().get_center()
+	_touch(0, box_at)
+	_touch(0, box_at, false)
+	check(not play.dialogue.typing() and play.dialogue.options.get_child_count() > 0, "tapping the box finishes the line")
+	check(play.rig.yaw == yaw, "tapping the box doesn't turn the camera")
+	await _frames(2)
+	var choice_at: Vector2 = play.dialogue.options.get_child(0).get_global_rect().get_center()
+	_touch(0, choice_at)
+	_touch(0, choice_at, false)
+	await _frames(1)
+	check(not play.dialogue.visible and play.state.has("quest"), "tapping a choice picks it")
+	play.queue_free()
+	PlayMode.touch = false
+	await _frames(1)
+
+
 func test_editor_places_moves_and_deletes() -> void:
 	var editor = StoryEditor.new()
 	root.add_child(editor)
