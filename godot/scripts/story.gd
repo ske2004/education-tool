@@ -11,7 +11,12 @@ const PROP_KINDS: Array[String] = [
 	"house", "tree", "pine", "rock", "fence", "lamp",
 	"bench", "well", "crate", "table", "shelf", "plant",
 	"pond", "river", "bridge", "fountain",
+	"dog", "cat", "chicken", "duck", "sheep", "cow", "rabbit", "fox", "owl",
 ]
+
+## Props that are animals: they wander around where they're placed, and
+## characters can look like one instead of a person.
+const ANIMALS: Array[String] = ["dog", "cat", "chicken", "duck", "sheep", "cow", "rabbit", "fox", "owl"]
 
 const PROP_COLORS := {
 	"house": "#e9d8b8", "tree": "#5c9e4c", "pine": "#3f7d4a",
@@ -19,6 +24,8 @@ const PROP_COLORS := {
 	"bench": "#8c5b3c", "well": "#a9a297", "crate": "#ba8b50",
 	"table": "#8c5b3c", "shelf": "#7b4f33", "plant": "#50995b",
 	"pond": "#3f8fcf", "river": "#3f8fcf", "bridge": "#8c5b3c", "fountain": "#b9b3a7",
+	"dog": "#a0703c", "cat": "#e08a3c", "chicken": "#f4f1ea", "duck": "#f2efe6",
+	"sheep": "#f1efe8", "cow": "#f4f4f0", "rabbit": "#c9b8a6", "fox": "#d9672b", "owl": "#8a6a4a",
 }
 
 ## How far from a prop's centre (in metres) a click still selects it.
@@ -26,6 +33,7 @@ const PROP_RADIUS := {
 	"house": 2.4, "well": 1.2, "fence": 1.5, "rock": 1.0,
 	"table": 1.1, "shelf": 1.1, "bench": 0.9,
 	"pond": 2.6, "river": 2.0, "bridge": 1.8, "fountain": 1.5,
+	"cow": 1.2, "sheep": 0.8, "dog": 0.7, "fox": 0.7,
 }
 
 ## Outdoor weather: how cloudy the sky is, and whether it rains.
@@ -107,6 +115,10 @@ static func fill_character(character: Dictionary) -> void:
 	character["pos"] = _pos(character.get("pos"))
 	character["rot"] = float(character.get("rot", 0.0))
 	_text(character, "color", "#d9825b")
+	## "person", or one of ANIMALS for a talking animal.
+	_text(character, "look", "person")
+	if not ANIMALS.has(character["look"]):
+		character["look"] = "person"
 	character["lines"] = _list(character.get("lines"))
 	var lines: Array = character["lines"]
 	for i in lines.size():

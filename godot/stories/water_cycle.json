@@ -262,6 +262,96 @@
 					],
 					"rot": 0,
 					"color": "#3f8fcf"
+				},
+				{
+					"kind": "chicken",
+					"pos": [
+						-9,
+						5.5
+					],
+					"rot": 30,
+					"color": "#f4f1ea"
+				},
+				{
+					"kind": "chicken",
+					"pos": [
+						-8.2,
+						4.4
+					],
+					"rot": -60,
+					"color": "#f4f1ea"
+				},
+				{
+					"kind": "chicken",
+					"pos": [
+						-5.6,
+						5.2
+					],
+					"rot": 120,
+					"color": "#f4f1ea"
+				},
+				{
+					"kind": "dog",
+					"pos": [
+						-0.5,
+						2.2
+					],
+					"rot": 200,
+					"color": "#a0703c"
+				},
+				{
+					"kind": "duck",
+					"pos": [
+						3.6,
+						11.4
+					],
+					"rot": 90,
+					"color": "#f2efe6"
+				},
+				{
+					"kind": "duck",
+					"pos": [
+						9.6,
+						8.0
+					],
+					"rot": -120,
+					"color": "#f2efe6"
+				},
+				{
+					"kind": "sheep",
+					"pos": [
+						-6,
+						12.8
+					],
+					"rot": 80,
+					"color": "#f1efe8"
+				},
+				{
+					"kind": "sheep",
+					"pos": [
+						-3.2,
+						13.4
+					],
+					"rot": -100,
+					"color": "#f1efe8"
+				},
+				{
+					"kind": "cow",
+					"pos": [
+						15.5,
+						11
+					],
+					"rot": 30,
+					"color": "#f4f4f0"
+				},
+				{
+					"kind": "rabbit",
+					"pos": [
+						-13.5,
+						-10.5
+					],
+					"rot": 45,
+					"color": "#c9b8a6"
 				}
 			],
 			"doors": [
@@ -352,6 +442,15 @@
 						6.6,
 						2.5
 					]
+				},
+				{
+					"kind": "cat",
+					"pos": [
+						5,
+						-4.5
+					],
+					"rot": -140,
+					"color": "#e08a3c"
 				}
 			],
 			"doors": [

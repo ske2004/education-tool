@@ -916,10 +916,20 @@ func _inspect_character() -> void:
 	var character := StoryData.find(story, "characters", selected["id"])
 	if character.is_empty():
 		return
-	_header("Person")
+	_header("Character")
 	_row("Name", _line_edit(character["name"], func(v):
 		character["name"] = v
 		_changed(true, true, false, [character, "name"])
+	))
+	var looks := [["person", "A person"]]
+	for kind in StoryData.ANIMALS:
+		looks.append([kind, "A talking " + kind])
+	_row("Looks like", _option(looks, character["look"], func(v):
+		character["look"] = v
+		# A new animal starts in its own colours.
+		if v != "person":
+			character["color"] = StoryData.PROP_COLORS[v]
+		_changed(true, true, true, [character, "look"])
 	))
 	_row("Colour", _color(character["color"], _setter(character, "color", true, true)))
 	_row("Place", _option(_place_options(), character["place"], func(v):

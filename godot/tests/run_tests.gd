@@ -39,6 +39,7 @@ func _run() -> void:
 		"test_new_ids_are_unique",
 		"test_every_place_builds",
 		"test_water_and_weather_build",
+		"test_animals_build",
 	]:
 		current = test
 		call(test)
@@ -48,6 +49,14 @@ func _run() -> void:
 	await test_play_mode_touch()
 	current = "test_rivers_block_and_bridges_cross"
 	await test_rivers_block_and_bridges_cross()
+	current = "test_animals_wander_and_react"
+	await test_animals_wander_and_react()
+	current = "test_jumping"
+	await test_jumping()
+	current = "test_space_still_talks_and_confirms"
+	await test_space_still_talks_and_confirms()
+	current = "test_sitting_on_benches"
+	await test_sitting_on_benches()
 	current = "test_editor_places_moves_and_deletes"
 	await test_editor_places_moves_and_deletes()
 	current = "test_editor_undo_and_redo"
@@ -262,6 +271,68 @@ func test_rivers_block_and_bridges_cross() -> void:
 	var crossed := await _walk_across([river, {"kind": "bridge", "pos": [0, 0], "rot": 0}])
 	check(crossed.x > 3.0, "a bridge takes the student across (x = %.2f)" % crossed.x)
 	check(absf(crossed.z) < 0.5, "the bridge's rails keep the student on it (z = %.2f)" % crossed.z)
+
+
+func test_animals_build() -> void:
+	var props := []
+	for kind in StoryData.ANIMALS:
+		props.append({"kind": kind, "pos": [0, 0]})
+	var story := StoryData.normalized({"places": [{"id": "a", "props": props}],
+			"characters": [{"id": "hoot", "name": "Hoot", "place": "a", "look": "owl"},
+				{"id": "x", "name": "X", "place": "a", "look": "dragon"}]})
+	check(story["characters"][0]["look"] == "owl", "characters can look like an animal")
+	check(story["characters"][1]["look"] == "person", "unknown looks become people")
+	var editing := Builder.build_place(story, "a", {}, true)
+	var entities: Dictionary = editing.get_meta("entities")
+	var animals := 0
+	for i in props.size():
+		var animal = entities["prop:%d" % i].get_node_or_null("Animal")
+		if animal and animal.kind == props[i]["kind"] and not animal.wander:
+			animals += 1
+	check(animals == StoryData.ANIMALS.size(), "every animal builds and stands still in the editor")
+	var hoot = entities["character:hoot"]
+	check(hoot.has_method("face") and "talking" in hoot and hoot.get_node_or_null("Body/Head") != null, "a talking owl can be talked to like a person")
+	editing.free()
+	var playing := Builder.build_place(story, "a")
+	var dog = playing.get_meta("entities")["prop:0"].get_node("Animal")
+	check(dog.wander, "animals wander while playing")
+	check(not playing.get_meta("entities")["character:hoot"].wander, "talking animals stay put")
+	playing.free()
+
+
+## Builds a place with one animal, optionally with a stand-in student, and
+## runs physics for `seconds`. Returns how far it ended up from `from`.
+func _animal_run(kind: String, student_at, seconds: float, from := Vector3.ZERO) -> float:
+	var story := StoryData.normalized({"places": [{"id": "a", "size": 30, "props": [{"kind": kind, "pos": [0, 0]}]}]})
+	var place := Builder.build_place(story, "a")
+	root.add_child(place)
+	var student: Node3D
+	if student_at != null:
+		student = Node3D.new()
+		student.add_to_group("student")
+		place.add_child(student)
+		student.global_position = student_at
+	var animal = place.get_meta("entities")["prop:0"].get_node("Animal")
+	var furthest := 0.0
+	for i in int(seconds * 60):
+		await physics_frame
+		furthest = maxf(furthest, animal.global_position.distance_to(Vector3.ZERO))
+	var distance: float = animal.global_position.distance_to(from)
+	place.queue_free()
+	await _frames(1)
+	check(furthest <= 3.5 * 1.5 + 0.1, "%s stays near home (went %.1f m)" % [kind, furthest])
+	return distance
+
+
+func test_animals_wander_and_react() -> void:
+	var wandered := await _animal_run("sheep", null, 8.0)
+	check(wandered > 0.3, "a sheep wanders off its spot (%.1f m)" % wandered)
+	var student := Vector3(1.0, 0, 0)
+	var fled := await _animal_run("chicken", student, 2.0, student)
+	check(fled > 2.0, "a chicken runs from a student who comes close (%.1f m away)" % fled)
+	var far := Vector3(5.0, 0, 0)
+	var dog_gap := await _animal_run("dog", far, 4.0, far)
+	check(dog_gap < 2.0, "a dog comes over to the student (%.1f m away)" % dog_gap)
 
 
 func _frames(n: int) -> void:

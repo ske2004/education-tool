@@ -7,6 +7,7 @@ const Spinner = preload("res://scripts/spinner.gd")
 const Drifter = preload("res://scripts/drifter.gd")
 const Rain = preload("res://scripts/rain.gd")
 const WaterShader = preload("res://shaders/water.gdshader")
+const Animals = preload("res://scripts/animals.gd")
 
 const SKIN := Color("#f1c7a1")
 const WOOD := Color("#6b4a2f")
@@ -86,7 +87,11 @@ static func build_place(story: Dictionary, place_id: String, collected := {}, ed
 	for character in story["characters"]:
 		if character["place"] != place_id:
 			continue
-		var node := make_person(Color(character["color"]), character["name"], true)
+		var node: Node3D
+		if character["look"] == "person":
+			node = make_person(Color(character["color"]), character["name"], true)
+		else:
+			node = Animals.make(character["look"], Color(character["color"]), character["name"], true)
 		_put(node, character)
 		root.add_child(node)
 		entities["character:" + character["id"]] = node
@@ -103,6 +108,14 @@ static func build_place(story: Dictionary, place_id: String, collected := {}, ed
 		interactables.append({"kind": "item", "id": item["id"], "node": node,
 				"label": "Pick up %s" % item["name"], "radius": 1.8})
 
+	# Animals stand still in the editor, so they stay where the teacher puts them.
+	if not editing:
+		for key in entities:
+			var animal = entities[key].get_node_or_null("Animal")
+			if animal:
+				animal.wander = true
+				animal.bounds = size / 2.0
+
 	if editing and story["start_place"] == place_id:
 		var marker := Node3D.new()
 		marker.add_child(make_ring(0.6, Color("#4a7fd4")))
@@ -115,6 +128,11 @@ static func build_place(story: Dictionary, place_id: String, collected := {}, ed
 
 static func make_prop(kind: String, color: Color) -> StaticBody3D:
 	var body := StaticBody3D.new()
+	if StoryData.ANIMALS.has(kind):
+		var animal := Animals.make(kind, color)
+		animal.name = "Animal"
+		body.add_child(animal)
+		return body
 	match kind:
 		"house":
 			box(body, Vector3(4, 3, 4), Vector3(0, 1.5, 0), color)

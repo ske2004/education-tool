@@ -53,6 +53,10 @@ special headers.
   placed 8 m apart. Rivers stop students; put a bridge across one to let
   them over.
 - **Weather**: outdoor places can be clear, cloudy or rainy.
+- **Animals**: dogs, cats, chickens, ducks, sheep, cows, rabbits, foxes and
+  owls wander around where you put them. Shy ones run from students, dogs
+  come over to say hello. A person can also look like an animal ("Looks
+  like" in their settings), for a talking fox or a wise owl.
 - **Doors** take students to another place. Students arrive in front of the
   door that leads back, so give each place a door back.
 - **People** say lines. A conversation starts at the first line marked "Can
@@ -113,8 +117,9 @@ Positions are `[x, z]` in metres on the ground, with `z` towards the camera.
 | `scripts/dialogue_box.gd`, `ui_theme.gd` | Dialogue UI and the app's look |
 | `scripts/main.gd` | Menu and switching between screens |
 | `scripts/story_files.gd` | Opening and saving stories; browser drafts and story links |
-| `scripts/touch_stick.gd` | The on-screen joystick for tablets |
+| `scripts/touch_stick.gd`, `jump_button.gd` | The on-screen joystick and Jump button for tablets |
 | `scripts/drifter.gd`, `rain.gd`, `shaders/water.gdshader` | Clouds, rain and water |
+| `scripts/animals.gd`, `animal.gd` | Animal models, and how they wander and react |
 
 ## Tests
 
