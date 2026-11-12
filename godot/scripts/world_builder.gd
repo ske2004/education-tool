@@ -67,6 +67,9 @@ static func build_place(story: Dictionary, place_id: String, collected := {}, ed
 		_put(node, props[i])
 		root.add_child(node)
 		entities["prop:%d" % i] = node
+		if props[i]["kind"] == "bench":
+			interactables.append({"kind": "seat", "id": i, "node": node,
+					"label": "Sit on the bench", "radius": 1.6})
 
 	var doors: Array = place["doors"]
 	for i in doors.size():

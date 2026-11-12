@@ -65,8 +65,12 @@ special headers.
 - **Conditions** ("Only if they have" / "Not if they have") check items and
   facts, so people can say different things as the story goes on.
 
-On a tablet, students walk with an on-screen joystick, drag to look around,
-pinch to zoom and tap to talk.
+Students walk with WASD or the arrow keys, jump with Space, and press E (or
+Enter) to talk, pick things up, go through doors and sit on benches; moving,
+jumping or E again stands them up. Space also moves a conversation on. Holding
+the right mouse button and dragging looks around. On a tablet, students walk
+with an on-screen joystick, jump with the round Jump button, drag to look
+around, pinch to zoom and tap to talk.
 
 The left panel lists problems to fix before playing, such as doors that lead
 nowhere or a story with no ending. Play tries the story straight from the

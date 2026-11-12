@@ -1,6 +1,6 @@
 {
 	"title": "Where Does the Water Go?",
-	"intro": "The village well is running dry. Talk to the people in the square and find out where all the water goes.\n\nWalk with WASD or the arrow keys. Press E to talk, pick things up and go through doors. Hold the right mouse button and drag to look around.",
+	"intro": "The village well is running dry. Talk to the people in the square and find out where all the water goes.\n\nWalk with WASD or the arrow keys. Press E to talk, pick things up, go through doors and sit on benches. Space jumps. Hold the right mouse button and drag to look around.",
 	"goal": "Find out where the village's water goes, and tell the mayor.",
 	"start_place": "village",
 	"start_pos": [

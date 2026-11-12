@@ -11,6 +11,9 @@ const Player = preload("res://scripts/player.gd")
 const CameraRig = preload("res://scripts/camera_rig.gd")
 const DialogueBox = preload("res://scripts/dialogue_box.gd")
 const TouchStick = preload("res://scripts/touch_stick.gd")
+const JumpButton = preload("res://scripts/jump_button.gd")
+## Prop kinds students can't stand in; a jump into them puts the student back.
+const WATER := ["river", "pond", "fountain"]
 
 ## True on phones and tablets, and anywhere once the screen has been touched.
 ## Kept between stories, so the joystick stays after "Play again".
@@ -35,6 +38,7 @@ var backpack: HFlowContainer
 var prompt: Button
 var exit_button: Button
 var stick: Control
+var jump_button: Control
 var toasts: VBoxContainer
 var dialogue
 var overlay: Control
@@ -55,6 +59,8 @@ func _ready() -> void:
 	rig.target = player
 	rig.exclude(player)
 	player.rig = rig
+	player.seat_changed.connect(_update_prompt)
+	player.splashed.connect(_toast.bind("Splash! The water is too deep."))
 	_build_hud()
 	if touch:
 		_use_touch()
@@ -70,11 +76,17 @@ func _start() -> void:
 
 
 func _enter_place() -> void:
+	player.stand_up()
 	if place_node:
 		remove_child(place_node)
 		place_node.queue_free()
 	place_node = Builder.build_place(story, state.place, state.collected)
 	add_child(place_node)
+	var props: Array = StoryData.find(story, "places", state.place).get("props", [])
+	var entities: Dictionary = place_node.get_meta("entities")
+	for i in props.size():
+		if props[i]["kind"] in WATER and entities.has("prop:%d" % i):
+			entities["prop:%d" % i].set_meta("water", true)
 	player.global_position = Vector3(state.pos[0], 0.05, state.pos[1])
 	player.velocity = Vector3.ZERO
 	rig.snap()
@@ -86,6 +98,7 @@ func _enter_place() -> void:
 
 func _process(_delta: float) -> void:
 	stick.visible = touch and not busy
+	jump_button.visible = stick.visible
 	if place_node:
 		Builder.update_walls(place_node, rig.camera.global_position)
 	if busy or place_node == null:
@@ -95,6 +108,11 @@ func _process(_delta: float) -> void:
 	for entry in place_node.get_meta("interactables"):
 		var node: Node3D = entry["node"]
 		if not is_instance_valid(node) or not node.is_inside_tree():
+			continue
+		# While sitting, the only thing to do is stand up again.
+		if player.seat:
+			if node == player.seat:
+				best = entry
 			continue
 		var offset: Vector3 = node.global_position - player.global_position
 		var d := Vector2(offset.x, offset.z).length()
@@ -121,17 +139,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if dialogue.visible:
-		if event is InputEventKey and event.pressed and not event.echo:
-			if event.keycode >= KEY_1 and event.keycode <= KEY_9:
-				dialogue.pick(event.keycode - KEY_1)
-				get_viewport().set_input_as_handled()
-			elif event.is_action("interact"):
-				dialogue.advance()
-				get_viewport().set_input_as_handled()
+		# Space jumps, but in a conversation it still moves the talk on.
+		if event is InputEventKey and event.pressed and not event.echo and event.keycode >= KEY_1 and event.keycode <= KEY_9:
+			dialogue.pick(event.keycode - KEY_1)
+			get_viewport().set_input_as_handled()
+		elif event.is_action_pressed("interact") or event.is_action_pressed("jump"):
+			dialogue.advance()
+			get_viewport().set_input_as_handled()
 		return
-	if not busy and not focus.is_empty() and event.is_action_pressed("interact"):
+	if busy:
+		return
+	if not focus.is_empty() and event.is_action_pressed("interact"):
 		get_viewport().set_input_as_handled()
 		_activate(focus)
+	elif event.is_action_pressed("jump"):
+		get_viewport().set_input_as_handled()
+		player.jump()
 
 
 func _activate(entry: Dictionary) -> void:
@@ -142,6 +165,11 @@ func _activate(entry: Dictionary) -> void:
 			_pick_up(entry)
 		"door":
 			_go_through(entry)
+		"seat":
+			if player.seat:
+				player.stand_up()
+			else:
+				player.sit_on(entry["node"])
 
 
 # Talking ---------------------------------------------------------------------
@@ -363,6 +391,14 @@ func _build_hud() -> void:
 	stick.visible = false
 	stick.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_KEEP_SIZE, 30)
 	layer.add_child(stick)
+	jump_button = JumpButton.new()
+	jump_button.visible = false
+	jump_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_KEEP_SIZE, 40)
+	jump_button.pressed.connect(func():
+		if not busy:
+			player.jump()
+	)
+	layer.add_child(jump_button)
 
 	overlay = ColorRect.new()
 	overlay.color = Color(0.1, 0.08, 0.05, 0.45)
@@ -434,7 +470,8 @@ func _update_prompt() -> void:
 		return
 	prompt.visible = not busy and not focus.is_empty()
 	if prompt.visible:
-		prompt.text = focus["label"] if touch else "E   %s" % focus["label"]
+		var label: String = "Stand up" if player.seat else focus["label"]
+		prompt.text = label if touch else "E   %s" % label
 
 
 ## Shows the joystick and makes the buttons big enough to tap.
@@ -444,6 +481,7 @@ func _use_touch() -> void:
 	exit_button.custom_minimum_size = Vector2(120, 60)
 	dialogue.touch = true
 	stick.visible = not busy
+	jump_button.visible = stick.visible
 	_update_prompt()
 
 

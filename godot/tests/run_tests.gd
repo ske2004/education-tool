@@ -206,6 +206,7 @@ func test_every_place_builds() -> void:
 	var village := Builder.build_place(story, "village")
 	var kinds: Array = village.get_meta("interactables").map(func(e): return e["kind"])
 	check(kinds.count("character") == 2 and kinds.count("door") == 1, "the village has two people and a door")
+	check(kinds.count("seat") == 1, "the village bench can be sat on")
 	check(not village.get_meta("entities").has("start"), "the start marker only shows while editing")
 	village.free()
 	var library := Builder.build_place(story, "library", {"notebook": true})
@@ -361,10 +362,20 @@ func test_play_mode_touch() -> void:
 	_touch(0, spot, false)
 	check(play.rig.yaw == yaw, "a drag that starts on a button doesn't turn the camera")
 
+	check(play.jump_button.visible, "the Jump button shows with the joystick")
+	var jump_at: Vector2 = play.jump_button.get_global_rect().get_center()
+	_touch(1, jump_at)
+	_touch(1, jump_at, false)
+	var top: float = await _hold("", 15, play.player)
+	check(top > 0.5, "tapping Jump jumps (%.2f)" % top)
+	check(play.rig.yaw == yaw, "tapping Jump doesn't turn the camera")
+	await _physics(40)
+
 	var mayor: Dictionary = play.place_node.get_meta("interactables").filter(func(e): return e["id"] is String and e["id"] == "mayor")[0]
 	play._activate(mayor)
 	await _frames(2)
 	check(play.dialogue.typing(), "the mayor starts talking")
+	check(not play.jump_button.visible, "the Jump button hides while talking")
 	var box_at: Vector2 = play.dialogue.get_global_rect().get_center()
 	_touch(0, box_at)
 	_touch(0, box_at, false)
@@ -493,3 +504,153 @@ func test_editor_undo_and_redo() -> void:
 	check(editor.undo_button.disabled and editor.redo_button.disabled, "and disables Undo and Redo")
 	editor.queue_free()
 	await _frames(1)
+
+
+## Starts play mode in a place made of `props`, with the intro card closed.
+func _play_in(props: Array, start: Array):
+	var story := StoryData.normalized({"places": [{"id": "a", "size": 30, "props": props}],
+			"start_place": "a", "start_pos": start})
+	var play = PlayMode.new()
+	play.setup(story)
+	root.add_child(play)
+	await _frames(3)
+	play._close_card()
+	await _physics(10)
+	return play
+
+
+func _physics(n: int) -> void:
+	for i in n:
+		await physics_frame
+
+
+## Presses and releases a key, going through the viewport like a real one.
+func _key(keycode: Key) -> void:
+	for pressed in [true, false]:
+		var event := InputEventKey.new()
+		event.keycode = keycode
+		event.physical_keycode = keycode
+		event.pressed = pressed
+		root.push_input(event)
+
+
+## Holds a move action (or none) for `n` physics frames and returns the
+## highest the student got.
+func _hold(action: String, n: int, player) -> float:
+	var top := -INF
+	if action != "":
+		Input.action_press(action)
+	for i in n:
+		await physics_frame
+		top = maxf(top, player.global_position.y)
+	if action != "":
+		Input.action_release(action)
+	return top
+
+
+func test_jumping() -> void:
+	var play = await _play_in([{"kind": "crate", "pos": [0, -1.5], "rot": 0}], [0, 0.4])
+	var player = play.player
+	check(player.is_on_floor(), "the student starts on the floor")
+	_key(KEY_SPACE)
+	await _physics(5)
+	check(player.visual.airborne, "the actor knows the student is in the air")
+	var top: float = await _hold("", 60, player)
+	check(top > 0.85 and top < 1.3, "Space jumps about a metre (%.2f)" % top)
+	check(player.is_on_floor() and player.global_position.y < 0.1, "the student lands again (y = %.2f)" % player.global_position.y)
+
+	_key(KEY_SPACE)
+	var stood_on := -1.0
+	Input.action_press("move_forward")
+	for i in 40:
+		await physics_frame
+		if player.is_on_floor() and player.global_position.y > stood_on:
+			stood_on = player.global_position.y
+	Input.action_release("move_forward")
+	check(absf(stood_on - 0.9) < 0.1, "a jump gets onto a crate (stood at y = %.2f)" % stood_on)
+	play.queue_free()
+	await _frames(2)
+
+	play = await _play_in([{"kind": "river", "pos": [0, 0], "rot": 0}], [-2.2, 0])
+	var splashes := [0]
+	play.player.splashed.connect(func(): splashes[0] += 1)
+	_key(KEY_SPACE)
+	await _hold("move_right", 60, play.player)
+	check(splashes[0] > 0 and play.player.global_position.x < -1.5, "jumping onto a river puts the student back on the bank (x = %.2f)" % play.player.global_position.x)
+	play.queue_free()
+	await _frames(2)
+
+
+func test_space_still_talks_and_confirms() -> void:
+	var play = PlayMode.new()
+	play.setup(sample())
+	root.add_child(play)
+	await _frames(3)
+	check(play.overlay.visible, "the intro card shows")
+	_key(KEY_SPACE)
+	await _frames(1)
+	check(not play.overlay.visible, "Space still presses the card's button")
+	var top: float = await _hold("", 20, play.player)
+	check(top < 0.1, "closing the card with Space doesn't jump (%.2f)" % top)
+
+	var mayor: Dictionary = play.place_node.get_meta("interactables").filter(func(e): return e["id"] is String and e["id"] == "mayor")[0]
+	play._activate(mayor)
+	await _frames(2)
+	check(play.dialogue.typing(), "the mayor starts talking")
+	_key(KEY_SPACE)
+	check(not play.dialogue.typing(), "Space finishes the line")
+	top = await _hold("", 30, play.player)
+	check(top < 0.1, "the student doesn't jump while talking (%.2f)" % top)
+	play.player.jump()
+	await _physics(5)
+	check(play.player.global_position.y < 0.1, "jump() does nothing while frozen")
+	play._end_talk()
+	await _frames(1)
+	play.queue_free()
+	await _frames(2)
+
+
+func test_sitting_on_benches() -> void:
+	# The bench turned 90 degrees faces +x; the other two stand side by side facing +z.
+	var props := [{"kind": "bench", "pos": [2, 0], "rot": 90}, {"kind": "bench", "pos": [-2, 0], "rot": 0},
+			{"kind": "bench", "pos": [0, 0], "rot": 0}]
+	var play = await _play_in(props, [3.2, 0])
+	var player = play.player
+	await _frames(2)
+	check(play.focus.get("kind") == "seat" and play.focus["id"] == 0, "the turned bench is in reach")
+	check(play.prompt.visible and play.prompt.text.ends_with("Sit on the bench"), "the prompt offers a seat: %s" % play.prompt.text)
+	_key(KEY_E)
+	check(player.seat == play.focus["node"], "E sits down")
+	var at: Vector3 = player.global_position
+	check(at.distance_to(Vector3(2.14, 0.55, 0)) < 0.05, "the student is on the seat: %s" % at)
+	check(play.prompt.text.ends_with("Stand up"), "the prompt offers standing up")
+	await create_timer(0.6).timeout
+	check(absf(angle_difference(player.visual.rotation.y, PI / 2.0)) < 0.1, "the student faces the way the bench does (%.2f)" % player.visual.rotation.y)
+	check(player.visual.get_node("Legs").visible, "the legs show while sitting")
+	await _physics(10)
+	check(player.global_position.distance_to(at) < 0.01, "sitting stays put")
+
+	await _hold("move_back", 2, player)
+	check(player.seat == null and not player.visual.sitting, "moving stands the student up")
+	check(not player.visual.get_node("Legs").visible, "the legs hide again")
+	check(player.global_position.x > 2.8 and player.global_position.y < 0.3, "standing up puts the student in front of the bench: %s" % player.global_position)
+	await _frames(2)
+	check(play.prompt.text.ends_with("Sit on the bench"), "the prompt offers the seat again")
+
+	_key(KEY_E)
+	check(player.seat != null, "E sits down again")
+	_key(KEY_E)
+	check(player.seat == null, "and E stands up")
+	_key(KEY_E)
+	_key(KEY_SPACE)
+	var top: float = await _hold("", 20, player)
+	check(player.seat == null and top < 0.2, "Space stands up instead of jumping (%.2f)" % top)
+
+	player.global_position = Vector3(0, 0.05, 1.2)
+	await _physics(5)
+	await _frames(2)
+	check(play.focus.get("id") == 2, "of two benches side by side, the nearer one is in reach")
+	_key(KEY_E)
+	check(player.global_position.distance_to(Vector3(0, 0.55, 0.14)) < 0.05, "and that is the one sat on: %s" % player.global_position)
+	play.queue_free()
+	await _frames(2)
