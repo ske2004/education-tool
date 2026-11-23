@@ -1,11 +1,32 @@
 name: Educore Workflow
 on: [push]
 jobs:
+  Test-Linux:
+    name: Test on Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
+      - name: install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxi-dev libxcursor-dev libgl-dev ninja-build cmake
+      - name: unit tests
+        run: python3 build.py test
+      - name: build
+        run: python3 build.py build
+      - name: agent tests
+        run: python3 -m unittest discover agents
+
   MakePkg-Windows:
     name: Build for Windows
     runs-on: windows-latest
+    if: github.ref == 'refs/heads/main'
+    needs: Test-Linux
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: benjlevesque/short-sha@v2.2
         id: short-sha
@@ -14,7 +35,7 @@ jobs:
       - name: checkout
         run: |
           git submodule init
-          git submodule update --remote
+          git submodule update
           git lfs install
           git lfs pull
       - name: build

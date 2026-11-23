@@ -15,6 +15,8 @@ struct UmkaModule
     void *umka;
     char *last_source_path;
     UmkaBindingsData *data;
+    bool has_error;
+    char error[512];
 
     static UmkaModule create(UmkaBindingsData *data);
     void destroy();
@@ -26,4 +28,8 @@ struct UmkaModule
                     UmkaStackSlot *params, UmkaStackSlot *result = nullptr);
 
     UmkaError *get_error();
+
+    // Fetches the current Umka error (if any) into has_error/error and logs it
+    void capture_error();
+    void clear_error();
 };
