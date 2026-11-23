@@ -1,0 +1,681 @@
+{
+	"title": "Where Does the Water Go?",
+	"intro": "The village well is running dry. Talk to the people in the square and find out where all the water goes.\n\nWalk with WASD or the arrow keys. Press E to talk, pick things up, go through doors and sit on benches. Space jumps. Hold the right mouse button and drag to look around.",
+	"goal": "Find out where the village's water goes, and tell the mayor.",
+	"start_place": "village",
+	"start_pos": [
+		0,
+		7
+	],
+	"places": [
+		{
+			"id": "village",
+			"name": "Village square",
+			"size": 40,
+			"props": [
+				{
+					"kind": "well",
+					"pos": [
+						0,
+						-3
+					]
+				},
+				{
+					"kind": "house",
+					"pos": [
+						-11,
+						-9
+					],
+					"color": "#e9d8b8"
+				},
+				{
+					"kind": "house",
+					"pos": [
+						-12,
+						3
+					],
+					"rot": 90,
+					"color": "#f0c9a0"
+				},
+				{
+					"kind": "house",
+					"pos": [
+						11,
+						-8
+					],
+					"color": "#9cc3e0"
+				},
+				{
+					"kind": "house",
+					"pos": [
+						12,
+						6
+					],
+					"rot": -90,
+					"color": "#e8b4a8"
+				},
+				{
+					"kind": "tree",
+					"pos": [
+						-5,
+						-12
+					]
+				},
+				{
+					"kind": "tree",
+					"pos": [
+						5,
+						-13
+					]
+				},
+				{
+					"kind": "tree",
+					"pos": [
+						-16,
+						-14
+					]
+				},
+				{
+					"kind": "tree",
+					"pos": [
+						16,
+						-15
+					]
+				},
+				{
+					"kind": "tree",
+					"pos": [
+						-16,
+						12
+					]
+				},
+				{
+					"kind": "tree",
+					"pos": [
+						-7,
+						14
+					]
+				},
+				{
+					"kind": "tree",
+					"pos": [
+						8,
+						14
+					]
+				},
+				{
+					"kind": "tree",
+					"pos": [
+						17,
+						14
+					]
+				},
+				{
+					"kind": "pine",
+					"pos": [
+						-17,
+						-3
+					]
+				},
+				{
+					"kind": "pine",
+					"pos": [
+						18,
+						-1
+					]
+				},
+				{
+					"kind": "pine",
+					"pos": [
+						0,
+						17
+					]
+				},
+				{
+					"kind": "rock",
+					"pos": [
+						6,
+						4
+					]
+				},
+				{
+					"kind": "rock",
+					"pos": [
+						-14,
+						9
+					]
+				},
+				{
+					"kind": "fence",
+					"pos": [
+						-9,
+						10
+					]
+				},
+				{
+					"kind": "fence",
+					"pos": [
+						-6,
+						10
+					]
+				},
+				{
+					"kind": "fence",
+					"pos": [
+						-3,
+						10
+					]
+				},
+				{
+					"kind": "lamp",
+					"pos": [
+						3,
+						-1
+					]
+				},
+				{
+					"kind": "lamp",
+					"pos": [
+						-3,
+						1
+					]
+				},
+				{
+					"kind": "lamp",
+					"pos": [
+						8,
+						-4
+					]
+				},
+				{
+					"kind": "bench",
+					"pos": [
+						-4,
+						-3
+					],
+					"rot": 90
+				},
+				{
+					"kind": "crate",
+					"pos": [
+						14,
+						-5
+					]
+				},
+				{
+					"kind": "crate",
+					"pos": [
+						14.5,
+						-3.5
+					]
+				},
+				{
+					"kind": "river",
+					"pos": [
+						-16,
+						-18
+					],
+					"rot": 90,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "river",
+					"pos": [
+						-8,
+						-18
+					],
+					"rot": 90,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "river",
+					"pos": [
+						0,
+						-18
+					],
+					"rot": 90,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "river",
+					"pos": [
+						8,
+						-18
+					],
+					"rot": 90,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "river",
+					"pos": [
+						16,
+						-18
+					],
+					"rot": 90,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "pond",
+					"pos": [
+						6.5,
+						9.5
+					],
+					"rot": 0,
+					"color": "#3f8fcf"
+				},
+				{
+					"kind": "chicken",
+					"pos": [
+						-9,
+						5.5
+					],
+					"rot": 30,
+					"color": "#f4f1ea"
+				},
+				{
+					"kind": "chicken",
+					"pos": [
+						-8.2,
+						4.4
+					],
+					"rot": -60,
+					"color": "#f4f1ea"
+				},
+				{
+					"kind": "chicken",
+					"pos": [
+						-5.6,
+						5.2
+					],
+					"rot": 120,
+					"color": "#f4f1ea"
+				},
+				{
+					"kind": "dog",
+					"pos": [
+						-0.5,
+						2.2
+					],
+					"rot": 200,
+					"color": "#a0703c"
+				},
+				{
+					"kind": "duck",
+					"pos": [
+						3.6,
+						11.4
+					],
+					"rot": 90,
+					"color": "#f2efe6"
+				},
+				{
+					"kind": "duck",
+					"pos": [
+						9.6,
+						8.0
+					],
+					"rot": -120,
+					"color": "#f2efe6"
+				},
+				{
+					"kind": "sheep",
+					"pos": [
+						-6,
+						12.8
+					],
+					"rot": 80,
+					"color": "#f1efe8"
+				},
+				{
+					"kind": "sheep",
+					"pos": [
+						-3.2,
+						13.4
+					],
+					"rot": -100,
+					"color": "#f1efe8"
+				},
+				{
+					"kind": "cow",
+					"pos": [
+						15.5,
+						11
+					],
+					"rot": 30,
+					"color": "#f4f4f0"
+				},
+				{
+					"kind": "rabbit",
+					"pos": [
+						-13.5,
+						-10.5
+					],
+					"rot": 45,
+					"color": "#c9b8a6"
+				}
+			],
+			"doors": [
+				{
+					"pos": [
+						11,
+						-5.4
+					],
+					"to": "library",
+					"label": "Library"
+				}
+			]
+		},
+		{
+			"id": "library",
+			"name": "Library",
+			"indoor": true,
+			"size": 16,
+			"props": [
+				{
+					"kind": "shelf",
+					"pos": [
+						-5,
+						-7.2
+					]
+				},
+				{
+					"kind": "shelf",
+					"pos": [
+						0,
+						-7.2
+					]
+				},
+				{
+					"kind": "shelf",
+					"pos": [
+						5,
+						-7.2
+					]
+				},
+				{
+					"kind": "shelf",
+					"pos": [
+						-7.2,
+						-2
+					],
+					"rot": 90
+				},
+				{
+					"kind": "shelf",
+					"pos": [
+						-7.2,
+						3
+					],
+					"rot": 90
+				},
+				{
+					"kind": "table",
+					"pos": [
+						0,
+						0
+					]
+				},
+				{
+					"kind": "plant",
+					"pos": [
+						6.5,
+						6.5
+					]
+				},
+				{
+					"kind": "plant",
+					"pos": [
+						-6.5,
+						6.5
+					]
+				},
+				{
+					"kind": "lamp",
+					"pos": [
+						6.5,
+						-5
+					]
+				},
+				{
+					"kind": "crate",
+					"pos": [
+						6.6,
+						2.5
+					]
+				},
+				{
+					"kind": "cat",
+					"pos": [
+						5,
+						-4.5
+					],
+					"rot": -140,
+					"color": "#e08a3c"
+				}
+			],
+			"doors": [
+				{
+					"pos": [
+						0,
+						7.6
+					],
+					"rot": 180,
+					"to": "village",
+					"label": "Village"
+				}
+			]
+		}
+	],
+	"characters": [
+		{
+			"id": "mayor",
+			"name": "Mayor Lena",
+			"place": "village",
+			"pos": [
+				-2,
+				-0.5
+			],
+			"color": "#7b5ea7",
+			"lines": [
+				{
+					"text": "Thank goodness you're here! Our well is nearly dry, and nobody knows where all the water goes. Librarian Omar reads about everything. Will you find out for us?",
+					"opens": true,
+					"choices": [
+						{
+							"text": "I'll find out!",
+							"next": -1,
+							"sets": "quest"
+						},
+						{
+							"text": "Where is the library?",
+							"next": 1
+						}
+					],
+					"unless": "learned_cycle"
+				},
+				{
+					"text": "It's the blue house on the east side of the square. Walk up to its door and press E.",
+					"opens": false,
+					"choices": [
+						{
+							"text": "Thanks, I'm on my way.",
+							"next": -1,
+							"sets": "quest"
+						}
+					]
+				},
+				{
+					"text": "You're back! So tell me: where does our water go?",
+					"opens": true,
+					"choices": [
+						{
+							"text": "The sun warms it, and it rises into the air as vapour.",
+							"next": 3
+						},
+						{
+							"text": "It sinks to the centre of the Earth.",
+							"next": 4
+						}
+					],
+					"requires": "learned_cycle"
+				},
+				{
+					"text": "Into the air? Then what happens to it up there?",
+					"opens": false,
+					"choices": [
+						{
+							"text": "It cools, turns into clouds and falls again as rain.",
+							"next": 5
+						},
+						{
+							"text": "It stays up there forever.",
+							"next": 4
+						}
+					]
+				},
+				{
+					"text": "Hmm, that doesn't sound like something Omar would say.",
+					"opens": false,
+					"choices": [
+						{
+							"text": "Let me think again.",
+							"next": 2
+						}
+					]
+				},
+				{
+					"text": "So the water comes back as rain! If we catch it in barrels, the well can rest. Thank you, you've saved the village!",
+					"opens": false,
+					"choices": [
+						{
+							"text": "Glad I could help.",
+							"next": -1,
+							"ending": "The village built rain barrels, and the well never ran dry again. You explained the water cycle: evaporation, condensation and precipitation."
+						}
+					]
+				}
+			]
+		},
+		{
+			"id": "farmer",
+			"name": "Farmer Pia",
+			"place": "village",
+			"pos": [
+				-7,
+				7
+			],
+			"rot": 30,
+			"color": "#d08c3c",
+			"lines": [
+				{
+					"text": "Morning! On hot days the puddles in my field are gone by lunchtime. My grandma said the sun drinks them.",
+					"opens": true,
+					"choices": [
+						{
+							"text": "Where do you think the water really goes?",
+							"next": 1
+						},
+						{
+							"text": "Have a nice day!",
+							"next": -1
+						}
+					]
+				},
+				{
+					"text": "Up, I suppose, but I've never seen water fly! Ask Omar at the library, he knows these things.",
+					"opens": false,
+					"choices": [
+						{
+							"text": "I will.",
+							"next": -1
+						}
+					]
+				}
+			]
+		},
+		{
+			"id": "librarian",
+			"name": "Librarian Omar",
+			"place": "library",
+			"pos": [
+				3.5,
+				-3
+			],
+			"color": "#3f8f8b",
+			"lines": [
+				{
+					"text": "Welcome to the library! Water is always on a journey we call the water cycle. I left a notebook about it on the table. Read it, then come and see me.",
+					"opens": true,
+					"choices": [
+						{
+							"text": "I'll take a look.",
+							"next": -1
+						}
+					],
+					"unless": "notebook"
+				},
+				{
+					"text": "Ah, you found my cloud notebook. Let's see what you learned. What happens when water vapour cools down high in the sky?",
+					"opens": true,
+					"choices": [
+						{
+							"text": "It forms tiny droplets, and they make clouds.",
+							"next": 2
+						},
+						{
+							"text": "It catches fire.",
+							"next": 3
+						}
+					],
+					"requires": "notebook",
+					"unless": "learned_cycle"
+				},
+				{
+					"text": "Exactly! That's condensation. When the droplets grow heavy, they fall as rain or snow: precipitation. Go and tell the mayor!",
+					"opens": false,
+					"choices": [
+						{
+							"text": "Thanks, Omar!",
+							"next": -1,
+							"sets": "learned_cycle"
+						}
+					]
+				},
+				{
+					"text": "Not quite! Have another look at the notebook, then try again.",
+					"opens": false,
+					"choices": [
+						{
+							"text": "Let me try again.",
+							"next": 1
+						}
+					]
+				},
+				{
+					"text": "Off you go, the mayor is waiting!",
+					"opens": true,
+					"choices": [
+						{
+							"text": "On my way.",
+							"next": -1
+						}
+					],
+					"requires": "learned_cycle"
+				}
+			]
+		}
+	],
+	"items": [
+		{
+			"id": "notebook",
+			"name": "Cloud notebook",
+			"place": "library",
+			"pos": [
+				0,
+				0
+			],
+			"color": "#f2c14e",
+			"description": "Evaporation: the sun warms water, and it rises into the air as invisible vapour.\nCondensation: high up, the vapour cools into tiny droplets that make clouds.\nPrecipitation: when the droplets get heavy, they fall as rain or snow."
+		}
+	]
+}

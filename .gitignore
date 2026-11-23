@@ -46,3 +46,6 @@ Thumbs.db
 
 # Tool state
 .redactor_history.db
+
+# Godot exports
+build/

@@ -45,6 +45,29 @@ jobs:
           cp agents/out/town.dat _site/town.dat 2>/dev/null || true
           touch _site/.nojekyll
 
+      - name: Install Godot and its export templates
+        env:
+          GODOT: 4.7.2-stable
+        run: |
+          base=https://github.com/godotengine/godot/releases/download/$GODOT
+          cd "$RUNNER_TEMP"
+          curl -sSLO "$base/SHA512-SUMS.txt"
+          curl -sSLO "$base/Godot_v${GODOT}_linux.x86_64.zip"
+          curl -sSLO "$base/Godot_v${GODOT}_export_templates.tpz"
+          grep -E " Godot_v${GODOT}_(linux.x86_64.zip|export_templates.tpz)$" SHA512-SUMS.txt | sha512sum -c -
+          unzip -q "Godot_v${GODOT}_linux.x86_64.zip"
+          sudo mv "Godot_v${GODOT}_linux.x86_64" /usr/local/bin/godot
+          templates="$HOME/.local/share/godot/export_templates/${GODOT/-/.}"
+          mkdir -p "$templates"
+          unzip -q "Godot_v${GODOT}_export_templates.tpz"
+          mv templates/* "$templates/"
+
+      - name: Export Educore Stories for the web
+        run: |
+          mkdir -p _site/stories
+          godot --headless --path godot --import
+          godot --headless --path godot --export-release Web "$PWD/_site/stories/index.html"
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
