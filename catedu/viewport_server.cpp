@@ -18,8 +18,10 @@
 #include <unistd.h>
 #endif
 
-// Include OpenGL headers for glReadPixels + framebuffer functions
-#if defined(__APPLE__)
+// Include OpenGL headers for glReadPixels + framebuffer functions.
+// Windows renders with D3D11, so there is no GL readback there.
+#if defined(_WIN32)
+#elif defined(__APPLE__)
 #include <OpenGL/gl3.h>
 #elif defined(__EMSCRIPTEN__)
 #include <GLES3/gl3.h>
@@ -47,6 +49,11 @@ void ViewportServer::init()
 #else
     frame_fd = _dup(_fileno(stdout));
     _dup2(_fileno(stderr), _fileno(stdout));
+#endif
+
+#ifdef _WIN32
+    fprintf(stderr, "--viewport-server is not supported on Windows.\n");
+    exit(1);
 #endif
 
     sg_tricks_init();
@@ -150,6 +157,10 @@ void ViewportServer::frame()
 
 void ViewportServer::send_frame()
 {
+#ifdef _WIN32
+    // Unreachable: init() exits on Windows.
+    return;
+#else
     // Read pixels from offscreen FBO via GL
     sg_gl_image_info gl_info = sg_gl_query_image_info(color_img);
     unsigned int tex = gl_info.tex[0];
@@ -162,6 +173,7 @@ void ViewportServer::send_frame()
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glDeleteFramebuffers(1, &fbo);
+#endif
 
     // Flip vertically (OpenGL reads bottom-up)
     int row_bytes = width * 4;
